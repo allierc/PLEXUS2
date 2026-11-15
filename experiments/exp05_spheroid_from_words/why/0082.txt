@@ -1,0 +1,4 @@
+time   2026-11-14 21:47:24
+run    tissue/exp05_topo_v82 (Plexus_Main.py -o generate on gpu_rtx6000)
+score  after 150.0 h: 10000 cells (from 20), 19 clusters, 1 spheroids of 8 cells or more, largest 9982 cells (roundness 0.89, smallest over largest principal axis, 1 = round), 1.00 of the cells in a cluster, nearest-neighbour centre distance of clustered cells 0.95 cell diameters (1 = touching, below 1 = overlapping),  0.99 growing; first spheroid at 0.0 h; cluster sizes [9982, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]; TOPOLOGY of the bodies of 8+ cells (cells, tunnels b1, cavities b2, roundness): [[9982, 33, 0, 0.89]], tunnels 33, cavities 0 in all; tunnels and cavities over time (h, b1, b2): [[14.9, 0, 0], [30.0, 0, 0], [45.0, 0, 0], [59.9, 1, 0], [75.0, 0, 0], [90.0, 0, 1], [104.9, 0, 1], [120.0, 1, 1], [135.0, 22, 4], [150.0, 33, 0]]; deaths seen between stored rows 0
+why    the two budding causes of 78 and 80 together on 68's cyst.

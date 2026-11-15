@@ -1,0 +1,5 @@
+time   2026-10-27 18:04:28
+spec   exp01_armadillo_cut_v3
+camera azim=35.0 elev=12.0 zoom=1.3
+movie  mp4/0009.mp4  (10.7 MB, copied from /groups/saalfeld/home/allierc/GraphData/graphs_data/studio/exp01_armadillo_cut_v3/movie.mp4)
+why    the armadillo cut in two, then in two again (Cedric's reading of experiments/Downloads/armodillo.gif): a 26 cm JELLY armadillo (600,000 points, youngs 2e4 Pa, Kelvin-Voigt eta 1 Pa s, no stretch tearing) standing on a pedestal with its feet anchored (mpm_anchor band, k 4000) under gravity, friction 0.8, a fixed 3.5 cm steel sphere gripping each hand (rigid bodies, stick, no motion); at frame 60 a vertical plane (x = 0.25, above the waist) cuts the torso and head into two halves (mpm_tear[cut], a 5 mm slab), at frame 120 a horizontal plane at the waist (y 0.247) cuts the torso from the legs; 240 frames of 4 s, grid 192^3; record look grey, white text, dots 1.0, front camera; should show the halves hanging from the spheres and the legs standing (after the run)

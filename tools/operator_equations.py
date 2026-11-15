@@ -1,0 +1,451 @@
+"""The hand-authored equations of the operator library: `ENRICH[name]` = dict(lead=..., equation=..., ...), the LaTeX a slide or a
+watcher pane shows for an operator beside the `equation=` its class declares (read by tools/spec_summary.py)."""
+
+ENRICH = {
+    "attraction_repulsion": dict(
+        lead="A smooth, per-type pairwise force law on a neighbour graph &mdash; the analytic "
+             "core of [ParticleGraph](https://github.com/allierc/ParticleGraph). A long-range "
+             "Gaussian pulls, a short-range Gaussian pushes; the balance between them, set "
+             "per particle type, selects the emergent phase: single clusters, multi-cluster "
+             "foams, lattices, or filaments.",
+        equation=r"""$$
+f(r) \;=\; p_1\,e^{-r^{2p_2}/2\sigma^2} \;-\; p_3\,e^{-r^{2p_4}/2\sigma^2},
+\qquad
+\dot{\mathbf{x}}_i \;=\; \sum_{j\in\mathcal{N}(i)} f(r_{ij})\,(\mathbf{x}_j-\mathbf{x}_i)
+$$
+with $\mathbf p=[p_1,p_2,p_3,p_4]$ the receiver type's parameters and $\sigma$ a global width.
+The first term is the long-range pull, the second the short-range push.""",
+        spec="""sets:
+  particle:
+    n: 30000
+    types:                       # per-type force law p = [pull, pull_range, push, push_range]
+      t0: {fraction: 0.34, p: [1.62, 1.04, 1.60, 1.56]}
+      t1: {fraction: 0.33, p: [1.77, 1.83, 1.09, 1.91]}
+      t2: {fraction: 0.33, p: [1.72, 1.79, 1.06, 1.86]}
+operators:
+  - {op: radius_graph,         at: particle, radius: 0.075}   # the rewire that defines N(i)
+  - {op: attraction_repulsion, at: particle, sigma: 0.005}
+schedule: [radius_graph, attraction_repulsion]""",
+        schedule="Always paired with a `rewire` that supplies the neighbour graph it reads. "
+                 "The canonical tick is `radius_graph` &rarr; `attraction_repulsion`; the graph is "
+                 "rebuilt every step so the force tracks the moving particles.",
+        gallery=("attraction.mp4", "Three types, 30&nbsp;000 particles, &sigma;=0.005, periodic &mdash; "
+                 "the field coarsens into a honeycomb of interconnected domains."),
+        identifiability=(
+            "Trajectories of a settled pattern pin down **ratios** far better than absolute scales. "
+            "$\\sigma$ and the $p$ magnitudes trade off (rescaling $\\sigma$ while rescaling the "
+            "exponents leaves the equilibrium spacing nearly unchanged), so recovering them needs "
+            "the **transient** &mdash; the approach to equilibrium &mdash; not just the final frame. "
+            "Inter-type parameters are only identifiable for type pairs that actually come into "
+            "contact; types that never mix leave their cross terms unconstrained."),
+        failure_modes=[
+            ("`sigma` too large vs. graph `radius`", "the cutoff clips the Gaussian before it decays &rarr; forces look truncated, clusters fray."),
+            ("net attraction with no repulsion (`p3`&approx;0)", "runaway collapse to a single point; add short-range push or a `radius_graph` floor."),
+            ("`aggr: sum` at high density", "force scales with neighbour count &rarr; denser regions blow up; `mean` (default) is density-independent."),
+            ("graph not rebuilt each tick", "particles outrun their edges; the force goes stale and the pattern freezes."),
+        ],
+        related=[("radius_graph", "the rewire that builds the neighbour graph this operator reads"),
+                 ("Coulomb", "a fixed $1/r^2$ law &mdash; the non-parametric cousin"),
+                 ("alignment", "another lateral law, velocity-aligning rather than position-based"),
+                 ("separation", "short-range repulsion alone, for collision handling")],
+    ),
+    "diffuse": dict(
+        lead="One explicit step of isotropic diffusion on a scalar field &mdash; a per-channel "
+             "3&times;3 box-blur lerp that is exactly one forward-Euler step of "
+             "$\\partial_t c = D\\,\\nabla^2 c$ with edge-clamped boundaries. It mutates the "
+             "field in place and returns nothing; it is the spreading half of every "
+             "reaction&ndash;diffusion and stigmergy schedule.",
+        equation=r"""$$
+c \;\leftarrow\; (1-w)\,c \;+\; w\,\overline{c}_{3\times3},
+\qquad w=\operatorname{sat}(\text{rate}\cdot\Delta t)
+$$
+$\overline{c}_{3\times3}-c$ is a discrete Laplacian, so this is one explicit step of
+$\partial_t c = D\,\nabla^2 c$ (3&times;3 in 2D, 3&times;3&times;3 in 3D).""",
+        spec="""fields:
+  chemical: {frame: grid, res: 96}
+operators:
+  - {op: diffuse, at: chemical, rate: 0.35}
+schedule: [secrete, diffuse, decay, sense]""",
+        schedule="Sits between deposition and sensing: a source operator (`deposit` / `secrete`) "
+                 "writes the field, `diffuse` spreads it, `decay` removes it, and a `sense` / "
+                 "`chemotaxis` operator reads the gradient. Multiple `diffuse` steps per tick give "
+                 "a larger effective diffusion length.",
+        gallery=("slime.mp4", "A self-organizing Physarum network &mdash; `diffuse` is the "
+                 "transport term that spreads the pheromone trail the agents then follow."),
+        identifiability=(
+            "Only the **product** rate&middot;$\\Delta t$ and the number of steps per tick are "
+            "observable &mdash; doubling `rate` and halving $\\Delta t$ is invisible. The diffusion "
+            "*length* $\\sqrt{D\\,t}$ is what patterns actually constrain, so from a single field "
+            "snapshot `rate` and total time are confounded; you need either a known $\\Delta t$ or "
+            "the time-course of a spreading front to separate them."),
+        failure_modes=[
+            ("`rate`&middot;`dt` &gt; 1", "the lerp saturates (clamped to 1) &rarr; the field becomes its own neighbourhood mean in one step; over-smoothing, lost structure."),
+            ("too few steps for the domain", "diffusion length too short &rarr; sources stay pinned, no long-range coupling."),
+            ("wrong boundary expectation", "edges are clamped (zero-flux), not periodic &mdash; mass piles up at walls unless the field is periodic by design."),
+        ],
+        related=[("decay", "the companion sink term; diffuse spreads, decay removes"),
+                 ("deposit", "writes a scalar source into the field that diffuse then spreads"),
+                 ("sense", "reads the diffused gradient back onto a set (stigmergy)"),
+                 ("chemotaxis", "particle-level gradient following on a diffused field")],
+    ),
+    "pulse_to_contraction": dict(
+        lead="The force half of an active-matter actuator: it reads an activation field "
+             "$a(\\mathbf x,t)$ and converts it into a per-particle MPM body force, returned "
+             "as a particle delta the MLS-MPM substep consumes. It owns only the **mechanical "
+             "mapping** &mdash; not *when* the tissue fires (`pacemaker`) nor *where* "
+             "(`pulse_stimulus`). This is how a beating heart wall is driven.",
+        equation=r"""$$
+\mathbf F_i \;=\;
+\begin{cases}
+\pm\,\text{amplitude}\,\nabla a(\mathbf x_i) & \text{gradient mode (inward / outward)}\\[4pt]
+\text{amplitude}\,a(\mathbf x_i)\,\mathbf d(\mathbf x_i) & \text{directional mode}
+\end{cases}
+$$
+In gradient mode the force points along $\pm\nabla a$ (contract / expand); in directional
+mode a unit vector-field $\mathbf d$ sets the orientation and $a$ sets the magnitude.""",
+        spec="""fields:
+  activation: {frame: grid, res: 128}
+  direction:  {frame: vector_grid, res: 128}
+operators:
+  - {op: pulse_to_contraction, at: mpm_particle, from: activation,
+     mode: directional, direction_from: direction, amplitude: 25.0}""",
+        schedule="A field-to-particle force in the MPM mechanics chain. The activation is timed "
+                 "and placed upstream, then converted to force, then run through the solver:\n\n"
+                 "```\npacemaker → pulse_stimulus → pulse_to_contraction → mpm_drag → "
+                 "[mpm_strain, p2g, mpm_grid_update, g2p]×substeps\n```",
+        gallery=("material.mp4", "Deformable matter under MLS-MPM &mdash; the same "
+                 "mechanics chain this operator feeds (here elastic bodies; the cardiac "
+                 "scenario swaps in a `directional` activation map)."),
+        identifiability=(
+            "`amplitude` is identifiable only **up to the material stiffness** it works against "
+            "&mdash; a strong force on stiff tissue and a weak force on soft tissue produce the "
+            "same strain, so observed deformation alone confounds `amplitude` with Young's "
+            "modulus (set via `apply_material_map`). Separating them needs either a known stiffness "
+            "map or observations across several activation levels. `mode` and `direction_from` are "
+            "structurally identifiable: inward/outward/directional give qualitatively different, "
+            "distinguishable strain fields."),
+        failure_modes=[
+            ("`amplitude` too high vs. `mpm_drag`", "the sheet overshoots and rings / inverts elements; raise `mpm_drag` k or lower amplitude."),
+            ("`mode: directional` without `direction_from`", "hard error &mdash; directional mode needs a vector_grid field for the orientation."),
+            ("activation not reset each tick", "force accumulates; the engine's zero_delta must clear the particle delta each outer tick."),
+            ("force scale vs. MPM `a_max`", "p2g clamps the body force at a_max; an amplitude above it is silently capped."),
+        ],
+        related=[("pacemaker", "sets *when* the activation field fires (the clock)"),
+                 ("activation_pulse", "sets *where/when* on the field the activation appears"),
+                 ("mpm_scatter", "scatters this force onto the MPM grid as the body force a_ext"),
+                 ("drag", "the companion damping force summed into the same particle delta")],
+    ),
+
+    "squared_law": dict(
+        lead="The inverse-square law between particles &mdash; one operator, two regimes selected "
+             "by `law`: **gravity** (mass-weighted, always attractive, softened, all-pairs) collapses "
+             "a rotating disc into a spiral galaxy; **coulomb** (signed charge, like-repel / "
+             "opposite-attract) is a screened plasma on the neighbour graph. Ported from "
+             "ParticleGraph's `PDE_E` (Coulomb) and Philip Mocz's N-body `getAcc` (gravity).",
+        equation=r"""$$
+\ddot{\mathbf x}_i \;=\; \mathrm{sign}\,k\;r_i\!\!\sum_{j}\, s_j\,
+\frac{\mathbf x_j-\mathbf x_i}{\big(\lVert\mathbf x_j-\mathbf x_i\rVert^{2}+\varepsilon^{2}\big)^{3/2}}
+$$
+`law: coulomb` uses signed charge $s=q$ with a like-repel sign and the receiver's own $q_i$;
+`law: gravity` uses $s=m$, always attracts, and the receiver factor is $1$ (equivalence
+principle). $\varepsilon$ is Plummer softening; `all_pairs` sums over every pair ($O(N^2)$)
+rather than over a `radius_graph`.""",
+        spec="""sets:
+  star: {n: 25000, vel_init: {mode: circular_orbit, spin: 0.9, central_mass: 0.5},
+         types: {s: {fraction: 1.0, mass: 0.00004}}}
+seed:
+  - {op: seed_positions, at: star, mode: disk, radius: 1.5}
+operators:
+  - {op: squared_law, at: star, law: gravity, softening: 0.08, all_pairs: true}
+schedule: [squared_law]""",
+        gallery=("inverse_square.mp4", "`law: gravity`, all-pairs, softened &mdash; a rotating "
+                 "disc of stars collapses under its own gravity into spiral structure."),
+        related=[("attraction_repulsion", "the parametric, per-type analogue on a neighbour graph"),
+                 ("radius_graph", "supplies the neighbour graph for the screened `coulomb` range"),
+                 ("attractor_flow", "another closed-form lateral flow, but single-particle chaos")],
+    ),
+
+    "attractor_flow": dict(
+        lead="Rides a whole cloud along a dissipative 3D **strange-attractor** vector field "
+             "$\\dot{\\mathbf x}=f(\\mathbf x)$. No interaction: every point is an independent "
+             "tracer of the same chaotic flow, so a tiny seed ball is stretched-and-folded until "
+             "the cloud *is* the attractor. `system` selects one of ten classic flows (Lorenz, "
+             "R&ouml;ssler, Aizawa, Sprott&nbsp;B, Halvorsen, Thomas, Chen, Chua, Dadras, "
+             "Rabinovich&ndash;Fabrikant), each citing its originating paper.",
+        equation=r"""$$
+\dot{\mathbf x} \;=\; f_{\text{system}}(\mathbf x),
+\qquad
+\text{e.g. Lorenz: }\;
+\dot x=\sigma(y-x),\;\; \dot y=x(\rho-z)-y,\;\; \dot z=xy-\beta z
+$$
+A first-derivative (velocity) flow, so the engine integrates $\mathbf x \mathrel{+}= \Delta t\,f(\mathbf x)$.
+3D only: a continuous planar autonomous flow cannot be chaotic (Poincar&eacute;&ndash;Bendixson).""",
+        spec="""sets:
+  cloud: {n: 60000, start: [0.6,0.6,14.6, 1.4,1.4,15.4]}   # tiny seed cube in the basin
+operators:
+  - {op: attractor_flow, at: cloud, system: lorenz, sigma: 10.0, rho: 28.0, beta: 2.6666667}
+schedule: [attractor_flow]""",
+        gallery=("attractor_lorenz.mp4", "`system: lorenz` &mdash; a seed cloud fans out onto the "
+                 "butterfly, its two lobes drawn by the chaotic flow."),
+        identifiability=(
+            "The trajectory pins down the flow's **constants** (e.g. Lorenz $\\sigma,\\rho,\\beta$) "
+            "from the shape and timing of the attractor, but sensitive dependence means individual "
+            "point paths diverge exponentially &mdash; only the *invariant set* (the attractor "
+            "geometry) and its spectrum are reproducibly identifiable, not any single orbit."),
+        related=[("squared_law", "the other closed-form lateral flow &mdash; pairwise, not single-particle"),
+                 ("drag", "a linear velocity law; attractor_flow is its nonlinear, chaotic cousin")],
+    ),
+
+    # --- equation-only enrichments (math straight from each operator's source) --- #
+    "Coulomb": dict(equation=r"""$$
+\ddot{\mathbf x}_i \;=\; \sum_{j\in\mathcal N(i)} -\,q_i q_j\,
+\frac{\mathbf x_j-\mathbf x_i}{\lVert\mathbf x_j-\mathbf x_i\rVert^{3}}
+$$
+The inverse-square law with superposition (`aggr: add`). Like charges $q_iq_j>0$
+repel, opposite charges attract; $\mathcal N(i)$ are the edges a `rewire` leaves."""),
+
+    "advance": dict(equation=r"""$$
+\dot{\mathbf x}_i \;=\; s_i\,\hat{\mathbf h}_i,\qquad \lVert\hat{\mathbf h}_i\rVert=1
+$$
+Self-propulsion at speed $s_i$ (`move_speed`) along the unit heading vector
+$\hat{\mathbf h}_i$ (the same $[N,D]$ orientation in 2D and 3D); the engine
+integrates the position ($\mathbf x \mathrel{+}= \Delta t\,\dot{\mathbf x}$)."""),
+
+    "aggregate": dict(equation=r"""$$
+\mathbf x_P \;=\; \frac{\sum_{i\in P} o_i\,\mathbf x_i}{\sum_{i\in P} o_i}
+$$
+The occupancy-weighted centroid of a parent $P$'s children ($o_i$ = occupancy). A
+derived readout written straight onto the parent, not an integrated force."""),
+
+    "alignment": dict(equation=r"""$$
+\mathbf a_i \;=\; a_2\,w^a_i\,\big\langle \mathbf v_j-\mathbf v_i\big\rangle_{j\in\mathcal N(i)}
+$$
+The boids velocity-matching rule: steer toward the mean neighbour velocity.
+$w^a_i$ is the receiver type's `alignment` weight; $\langle\cdot\rangle$ is the mean over neighbours."""),
+
+    "cohesion": dict(equation=r"""$$
+\mathbf a_i \;=\; a_1\,w^c_i\,\big\langle \mathbf x_j-\mathbf x_i\big\rangle_{j\in\mathcal N(i)}
+$$
+The boids centring rule: steer toward the local centre of mass (mean offset to
+neighbours). $w^c_i$ is the receiver type's `cohesion` weight."""),
+
+    "separation": dict(equation=r"""$$
+\mathbf a_i \;=\; -\,a_3\,w^s_i\,
+\Big\langle \frac{\mathbf x_j-\mathbf x_i}{\lVert\mathbf x_j-\mathbf x_i\rVert^{2}}\Big\rangle_{j\in\mathcal N(i)}
+$$
+The boids anti-crowding rule: push away from close neighbours, weighted by
+$1/\lVert d\rVert^{2}$. The graph's `min_radius` keeps coincident neighbours finite."""),
+
+    "drag": dict(equation=r"""$$
+\mathbf a_i \;=\; -\,k\,\mathbf v_i
+$$
+Viscous friction as an acceleration ($k$ = drag coefficient). A force in the
+schedule, not an integrator knob, so it composes with the other second-derivative laws."""),
+
+    "gravity": dict(equation=r"""$$
+\mathbf a_{\text{ext}} \;=\; \mathbf g \qquad (\text{default } \mathbf g=(0,-g_y))
+$$
+A uniform body acceleration returned as a cell delta; in an MPM scene the substep
+reads it as the external body force rather than the engine integrating it."""),
+
+    "broadcast": dict(equation=r"""$$
+\dot{\mathbf x}_i \;=\; k\,\big(\mathbf x_{P(i)}-\mathbf x_i\big)
+$$
+The containment lift: each child is pulled toward its parent $P(i)$'s position with
+stiffness $k$ — the down-the-hierarchy dual of `aggregate`."""),
+
+    "chemotaxis": dict(equation=r"""$$
+\dot{\mathbf x}_i \;=\; g\,\nabla\phi(\mathbf x_i)
+$$
+The Keller–Segel coupling: climb (or, for $g<0$, flee) the gradient of field $\phi$
+sampled at the particle. A first-derivative velocity that simply sums with any other."""),
+
+    "decay": dict(equation=r"""$$
+c \;\leftarrow\; \max\!\big(0,\; c - k\,\Delta t\big)
+$$
+Linear evaporation of a scalar field at rate $k$ — the sink that lets stigmergic
+trails fade so the network coarsens. The companion of `deposit` / `diffuse`."""),
+
+    "deposit": dict(equation=r"""$$
+c_{s}\big(\mathrm{pix}(\mathbf x_i)\big) \;\leftarrow\;
+\min\!\Big(1,\; c_{s}\big(\mathrm{pix}(\mathbf x_i)\big) + a\,\Delta t\Big),
+\qquad s=\text{type}(i)
+$$
+Each agent adds $a\,\Delta t$ (`amount`) to its own species channel $s$ at the pixel
+under its position, clamped to 1 — the only place agents imprint the trail."""),
+
+    "radius_graph": dict(equation=r"""$$
+E \;=\; \big\{\,(i,j)\;:\; r_{\min} \le \lVert\mathbf x_i-\mathbf x_j\rVert < r\,\big\}
+$$
+Rebuilds the neighbour relation each tick: an edge for every pair within `radius` $r$
+(and beyond an optional `min_radius` floor). Emits no delta — lateral ops read these edges."""),
+
+    "pacemaker": dict(equation=r"""$$
+p(t) \;=\;
+\begin{cases}
+\sin\!\big(\pi\, s/\tau_d\big) & s<\tau_d\\[2pt]
+0 & \text{otherwise}
+\end{cases},
+\qquad s=(t+\varphi)\bmod T
+$$
+A smooth raised bump of width $\tau_d$ (`duration`) once per period $T$, offset by
+phase $\varphi$, in outer ticks $t$. Written to `H.signals[name]` for downstream ops."""),
+
+    "pulse_stimulus": dict(equation=r"""$$
+a(\mathbf x,t) \;=\; p(t)\,\exp\!\Big(-\tfrac{\lVert\mathbf x-\mathbf x_0\rVert^{2}}{2\sigma^{2}}\Big),
+\qquad \sigma=\text{radius}
+$$
+Paints the clock $p(t)$ (from a `pacemaker`) as a Gaussian bump centred at $\mathbf x_0$.
+Owns *where* the stimulus is — not *when* (the pacemaker) nor its mechanical effect."""),
+
+    "phase_delay_pulse": dict(
+        lead="The spatial generalization of the `pacemaker`&rarr;`pulse_stimulus` pair: "
+             "every pixel runs the **same** raised-bump waveform, but offset by a per-pixel "
+             "delay $\\tau(\\mathbf x)$ read from an image map. A delay **gradient** makes "
+             "neighbouring regions fire in sequence &mdash; a travelling activation wave &mdash; and "
+             "under an elastic tissue (with a downstream active-stress / contraction operator) that "
+             "timing gradient becomes curved, rotating, cardiac-like motion. It owns both **when** "
+             "(per pixel) and **where** (via the map), so it schedules in place of the "
+             "pacemaker+stimulus pair it subsumes.",
+        equation=r"""$$
+a(\mathbf x,t) \;=\; \mathrm{pulse}\big(t-\tau(\mathbf x)\big),
+\qquad \tau(\mathbf x)=\tau_{\max}\,m(\mathbf x),\quad m(\mathbf x)\in[0,1]
+$$
+$$
+\mathrm{pulse}(t') \;=\;
+\begin{cases}
+\sin\!\big(\pi\, s/\tau_d\big) & s<\tau_d\\[2pt]
+0 & \text{otherwise}
+\end{cases},
+\qquad s=(t'+\varphi)\bmod T
+$$
+The same smooth bump as `pacemaker` (width $\tau_d$ = `duration`, period $T$, phase $\varphi$),
+evaluated per pixel at its own local time $t-\tau$. The delay map $m$ is an `image` field;
+$\tau_{\max}$ (`max_delay`) is the delay where the map saturates. So `pacemaker` is the special
+case $\tau\equiv 0$, and a linear $m$ (e.g. $m=x$) gives a plane wave, a radial $m$ a target wave.""",
+        spec="""fields:
+  delay:      {frame: image, source: material/delay_radial.tif}   # tau(x,y) normalised to [0,1]
+  activation: {frame: grid, res: 128}
+operators:
+  - {op: phase_delay_pulse, at: activation, delay_from: delay,
+     period: 150, duration: 30, max_delay: 40}                    # subsumes pacemaker + pulse_stimulus
+  - {op: pulse_to_active_stress, at: mpm_particle, from: activation, amplitude: 25.0}
+schedule: [phase_delay_pulse, pulse_to_active_stress, mpm_drag,
+           mpm_strain, p2g, mpm_grid_update, g2p]""",
+        schedule="Drops in **where `pacemaker` + `pulse_stimulus` would go** &mdash; it is a field "
+                 "source, scheduled before the operator that reads the activation, then the MPM "
+                 "mechanics chain:\n\n"
+                 "```\nphase_delay_pulse → pulse_to_active_stress → mpm_drag → "
+                 "[mpm_strain, p2g, mpm_grid_update, g2p]×substeps\n```\n\n"
+                 "Swap `pulse_to_active_stress` for `pulse_to_contraction` to drive the tissue by "
+                 "body force instead of active stress &mdash; the activation field is identical.",
+        identifiability=(
+            "Only the delay **modulo the period** is observable: the activation is periodic in $t$, "
+            "so $\\tau_{\\max}$ and $T$ are confounded unless `max_delay` &lt; `period` (otherwise the "
+            "late regions alias back onto the early phase and the wave appears to re-enter). The delay "
+            "**map shape** $m(\\mathbf x)$ is what sets the wavefront geometry and is well constrained "
+            "by the *direction* of the observed travelling wave; its overall *scale* $\\tau_{\\max}$ "
+            "trades off against both the period and the tissue stiffness it works against, so recovering "
+            "it needs the transient (the wave sweeping across) rather than a single phase. The map is "
+            "analytic now (a TIFF) and learnable later, exactly like a stiffness map."),
+        failure_modes=[
+            ("`max_delay` &ge; `period`", "the latest pixels wrap past a full beat &rarr; spurious re-entry / the wave appears to fold back; keep the spread of $\\tau$ below one period."),
+            ("delay map not normalised to [0,1]", "$\\tau=\\tau_{\\max}m$ is mis-scaled &mdash; the operator expects a normalised map (like a stiffness map); an unnormalised TIFF gives the wrong wave speed."),
+            ("missing `delay_from`", "hard error &mdash; the operator requires an image field for $\\tau(\\mathbf x)$ (there is no sensible default map)."),
+            ("`duration` too short vs. substep response", "the bump passes a pixel before the tissue mechanically responds &rarr; weak / no motion; widen `duration` or raise `amplitude` downstream."),
+            ("map resolution &ne; field resolution", "silently bilinear-resampled to the activation grid &mdash; harmless, but a coarse map blurs the wavefront."),
+        ],
+        related=[("pacemaker", "the global clock this subsumes &mdash; the $\\tau\\equiv 0$ special case (owns *when*)"),
+                 ("pulse_stimulus", "the fixed spatial paint this subsumes (owns *where*)"),
+                 ("pulse_to_active_stress", "reads the delayed activation and turns it into contractile stress"),
+                 ("pulse_to_contraction", "the body-force alternative downstream; same activation field"),
+                 ("apply_material_map", "the same image-field idiom &mdash; a TIFF sampled per particle/pixel")],
+    ),
+
+    "pulse_to_active_stress": dict(equation=r"""$$
+\boldsymbol\sigma_{\text{active}}(\mathbf x) \;=\;
+-\,A\,a(\mathbf x)\,\mathbf n(\mathbf x)\,\mathbf n(\mathbf x)^{\!\top},
+\qquad \lVert\mathbf n\rVert=1
+$$
+Activation $a$ becomes a rank-1 contractile stress along the unit axis $\mathbf n$
+($A$ = `amplitude`). `p2g` adds it to the elastic stress, so tissue feels its
+**divergence**: a patch under uniform $-A\,\mathbf n\mathbf n^{\!\top}$ shortens along $\mathbf n$."""),
+
+    "playback": dict(equation=r"""$$
+\phi(\cdot,\,t) \;=\; V\big[\,t \bmod N_{\text{frames}}\,\big]
+$$
+Prescribes the field from a recorded movie: the grid is set to the current tick's
+frame. A coupling op (e.g. `chemotaxis`) then drives particles from it."""),
+
+    "apply_material_map": dict(equation=r"""$$
+E_i \;=\; E_{\min} + m(\mathbf x_i)\,(E_{\max}-E_{\min}),
+\qquad (\mu_i,\lambda_i) = \mathrm{Lam\acute e}(E_i)
+$$
+Bilinearly samples the image field $m\in[0,1]$ at each particle and maps it to a
+per-particle Young's modulus $E_i$, then to the Lamé buffers the MPM stress law reads.
+Not a force — it sets the *material*, breaking symmetry without changing MPM physics."""),
+
+    "mpm_strain": dict(equation=r"""$$
+\mathbf F \;\leftarrow\; (\mathbf I + \Delta t\,\mathbf C)\,\mathbf F
+\qquad\text{(liquid: } \mathbf F\leftarrow J^{1/d}\mathbf I,\ J=\det\mathbf F\text{)}
+$$
+Advances the deformation gradient from the affine velocity $\mathbf C$, then applies
+the material correction: liquids drop shape memory, snow clamps the singular values of
+$\mathbf F$ and hardens via the plastic ratio $J_p$. Step 1 of the MLS-MPM decomposition."""),
+
+    "p2g": dict(equation=r"""$$
+\boldsymbol\sigma = 2\mu(\mathbf F-\mathbf R)\mathbf F^{\!\top} + \lambda(J-1)J\,\mathbf I,
+\qquad
+\mathbf Q = -\frac{4\,\Delta t}{\Delta x^{2}}\,V\,\boldsymbol\sigma + m\,\mathbf C
+$$
+$$
+m_g \mathrel{+}= \sum_i w_{ig}\,m_i,
+\qquad
+\mathbf p_g \mathrel{+}= \sum_i w_{ig}\big(m_i\mathbf v_i + \mathbf Q_i(\mathbf x_g-\mathbf x_i)\big)
+$$
+The fixed-corotated stress ($\mathbf R$ = polar rotation of $\mathbf F$) forms the
+affine momentum matrix $\mathbf Q$, scattered to the grid by the quadratic B-spline
+weights $w_{ig}$. Step 2 of the MLS-MPM decomposition."""),
+
+    "mpm_grid_update": dict(equation=r"""$$
+\mathbf v_g = \frac{\mathbf p_g}{m_g},
+\qquad
+\mathbf v_g \mathrel{+}= \Delta t\,\mathbf f^{\,\text{CSF}}_g,
+\qquad
+\mathbf v_g \leftarrow \mathrm{BC}(\mathbf v_g)
+$$
+Grid momentum $\to$ velocity, plus the continuum surface force (CSF) from the liquid
+colour field, then boundary conditions: reflective walls, obstacle friction, interior
+mask. A pure field $\to$ field solve. Step 3 of the MLS-MPM decomposition."""),
+
+    "g2p": dict(equation=r"""$$
+\mathbf v_i = \sum_g w_{ig}\,\mathbf v_g,
+\qquad
+\mathbf C_i = \frac{4}{\Delta x^{2}}\sum_g w_{ig}\,\mathbf v_g\,(\mathbf x_g-\mathbf x_i)^{\!\top},
+\qquad
+\mathbf x_i \mathrel{+}= \Delta t\,\mathbf v_i
+$$
+Gathers grid velocity back to particles (new velocity + affine matrix $\mathbf C$),
+applies wall restitution and the CFL cap, then advects. Step 4 of the MLS-MPM decomposition."""),
+
+    "mpm_drag": dict(equation=r"""$$
+\mathbf a_i = -\,k\,\mathbf v_i
+\qquad\longrightarrow\qquad
+\mathbf a_{\text{ext}} \mathrel{+}= \mathbf a_i
+$$
+Viscous body drag as a particle delta that `p2g` consumes as a body force (not an
+integrator knob). Large $k$ gives the overdamped, tissue-like regime that creeps to
+$\mathbf a/k$ without ringing. Replaces `p2g`'s built-in `drag`."""),
+
+    "sense": dict(equation=r"""$$
+S_k = \!\!\sum_{\mathbf p\in W_k}\!\Big(c_{\text{own}}(\mathbf p) + \kappa\!\!\sum_{s\ne\text{own}}\!\! c_s(\mathbf p)\Big),
+\quad k\in\{C\}\cup\text{fan};
+\qquad
+\hat{\mathbf h}_i \leftarrow \mathrm{normalize}\big(\hat{\mathbf h}_i + \omega\,\mathbf r_{k^\star}\big)
+$$
+Dimension-generic Physarum sensing: a centre sensor along $\hat{\mathbf h}$ plus a
+fan tilted by `sensor_angle` -- two sensors (ahead-left / ahead-right) in 2D, a ring
+of $K$ in 3D. Each window $W_k$ is a species-weighted sum (own channel $+1$, others
+$\kappa$ = `cross`). If a fan direction $k^\star$ beats the centre, rotate
+$\hat{\mathbf h}$ toward it (up to `turn_speed` $\omega$) and renormalise."""),
+}

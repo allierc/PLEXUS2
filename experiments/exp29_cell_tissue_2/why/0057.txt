@@ -1,0 +1,5 @@
+time   2026-11-02 13:17:21
+run    tissue/mpm_grid3x3_cycles_p1000 (mpm; ink look, every cell its own colour, by id, tools/exp29_studio.py)
+drawn  126 of 126 stored rows; activator scale 0..1 (99.5th percentile of the whole run)
+insets cells 9 -> 37; cell volume (µm³) mean 1000 -> 1357, y to 2285
+why    BASELINE, NO SWEEP: 9 cells grow and divide twice; every family labelled with its number 1-9 (Cedric, 2026-10-31: movie 1 had no label)  -- RERUN AT 1000 POINTS PER CELL (Cedric, 2026-11-02)

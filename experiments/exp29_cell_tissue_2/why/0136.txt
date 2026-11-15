@@ -1,0 +1,5 @@
+time   2026-11-12 18:13:00
+run    tissue/mpm_sphere_twin_4000_three_stage_skin (mpm; ink look, every cell its own colour, by id, tools/exp29_studio.py)
+drawn  100 of 100 stored rows; activator scale 0..1 (99.5th percentile of the whole run)
+insets cells 21 -> 32; cell volume (µm³) mean 1378 -> 1225, y to 1685
+why    THE 4000-POINT TWIN WITH THE THREE ADHESION STAGES AND THE 3-LAYER SKIN, WHOLE SPHERE (Cedric, 2026-11-12): spec config/tissue/mpm_sphere_twin_4000_three_stage_skin.yaml; the three adhesion stages of the run of step 0132 plus a skin of 3 layers (pitch 0.0517, trim 0.15, front layers 0.0053 apart) on every face where two cells touch at the first frame and on both faces of every division; the sphere of 20 red cells round one blue cell, no cross section, both cell types solid, black ground, frames 1 to 300 only

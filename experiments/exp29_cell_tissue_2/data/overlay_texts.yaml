@@ -1,0 +1,289 @@
+font_px:
+- 24
+- 20
+margin_px: 14
+steps:
+  '0057':
+    lines:
+    - 'baseline, no sweep: 9 cells grow and divide twice'
+    - pair_potential(cell_contact)  contact_slack 0.05
+    - contact_surface_tension 0, contact_edge_width 0.2
+  0058:
+    lines:
+    - pair_potential(cell_contact)  contact_slack
+    - 0 to 0.35, one value per family (labels)
+    - 'fixed: contact_surface_tension 0, contact_edge_width 0.2'
+  0059:
+    lines:
+    - pair_potential(cell_contact)  contact_slack
+    - 0.25 to 50, one value per family (labels)
+    - 'fixed: contact_surface_tension 0, contact_edge_width 0.2'
+  '0060':
+    lines:
+    - pair_potential(cell_contact)  contact_slack
+    - 0.25 to 0.5, one value per family (labels)
+    - 'fixed: contact_surface_tension 0, contact_edge_width 0.2'
+  '0061':
+    lines:
+    - pair_potential(cell_contact)  contact_edge_width
+    - -0.8 to 0.8 length units (1 unit = 10 um), per family (labels)
+    - 'fixed: contact_slack 2, contact_surface_tension -0.1'
+  '0062':
+    lines:
+    - pair_potential(cell_contact)  contact_edge_width
+    - 0.05 to 1 length units (1 unit = 10 um), per family (labels)
+    - 'fixed: contact_slack 2, contact_surface_tension -0.1'
+  '0063':
+    lines:
+    - pair_potential(cell_contact)  contact_surface_tension
+    - -1 to 1, one value per family (labels)
+    - 'fixed: contact_slack 2, contact_edge_width 0.2'
+  '0064':
+    lines:
+    - pair_potential(cell_contact)  contact_slack
+    - 1 to 50, one value per family (labels)
+    - 'fixed: contact_surface_tension 0, contact_edge_width 0.2'
+  '0065':
+    lines:
+    - active_force(footprint_spreading)  spreading_strength
+    - 0 to 100 (spreading acceleration), per family (labels)
+    - 'fixed: growth_law_exponent 1, contact_slack 2, contact_edge_width 0.2,'
+    - contact_surface_tension -0.1
+  '0066':
+    lines:
+    - active_force(footprint_spreading)  spreading_strength
+    - 100 to 1000 (spreading acceleration), per family (labels)
+    - 'fixed: growth_law_exponent 1, contact_slack 2, contact_edge_width 0.2,'
+    - contact_surface_tension -0.1
+  '0067':
+    lines:
+    - active_force(footprint_spreading)  growth_law_exponent
+    - 1.0 to 1.8, one value per family (labels)
+    - 'fixed: spreading_strength 100, contact_slack 2, contact_edge_width 0.2,'
+    - contact_surface_tension -0.1
+  0068:
+    lines:
+    - active_force(footprint_spreading)  growth_law_exponent
+    - 1.0 to 1.8, one value per cell (labels)
+    - 'fixed: spreading_strength 100, no division, contact_slack 2,'
+    - contact_surface_tension -0.1
+  0069:
+    lines:
+    - deform_control(cell_flattening)  flattening_rate
+    - 0 to 0.004 per frame, one value per cell (labels)
+    - 'fixed: no division, contact_slack 2, contact_edge_width 0.2,'
+    - contact_surface_tension -0.1
+  '0070':
+    lines:
+    - attraction_repulsion(stretched_cohesion)  z_stretch
+    - 1 to 3 (z stretch of the distance), per cell (labels)
+    - 'fixed: gain 2, no division, contact_slack 2, contact_surface_tension -0.1'
+  '0071':
+    lines:
+    - deform_control(cell_flattening)  flattening_rate
+    - 0 to 0.016 per frame, one value per cell (labels)
+    - 'fixed: no division, contact_slack 2, contact_edge_width 0.2,'
+    - contact_surface_tension -0.1
+  '0072':
+    lines:
+    - attraction_repulsion(stretched_cohesion)  z_stretch
+    - 1 to 3 (z stretch of the distance), per cell (labels)
+    - 'fixed: gain 300, no division, contact_slack 2,'
+    - contact_surface_tension -0.1
+  '0073':
+    lines:
+    - attraction_repulsion(stretched_cohesion)  z_stretch
+    - 1 to 3 (z stretch of the distance), per cell (labels)
+    - 'fixed: gain 3000, no division, contact_slack 2,'
+    - contact_surface_tension -0.1
+  '0074':
+    lines:
+    - deform_control(cell_flattening)  flattening_rate
+    - 0 to 0.008 per frame, one value per family (labels)
+    - 'fixed: 2 divisions, contact_slack 2, contact_edge_width 0.2,'
+    - contact_surface_tension -0.1
+  '0075':
+    lines:
+    - deform_control(cell_flattening)  flattening_rate
+    - 0 to 0.004 per frame (labels), seeds 100 um apart
+    - 'fixed: 5 divisions, contact_slack 2, contact_surface_tension -0.1'
+  '0076':
+    lines:
+    - deform_control(cell_flattening)  flattening_rate
+    - 0 to 0.004 per frame (labels), seeds 24 um apart
+    - 'fixed: 5 divisions, contact_slack 2'
+  '0077':
+    lines:
+    - deform_control(cell_flattening)  flattening_rate 0.0035 per frame
+    - 'no sweep: one cell, ten divisions'
+    - 'fixed: contact_slack 2, contact_edge_width 0.2,'
+    - contact_surface_tension -0.1
+  0080:
+    lines:
+    - mpm_grid_update(warp_pp_balanced)  cell_surface_tension
+    - 0 to 4.8, one value per family (labels)
+    - 'fixed: cell_flattening flattening_rate 0.0035, 5 divisions,'
+    - contact_slack 2
+  0081:
+    lines:
+    - bond_binding  adhesion maximum rho* (LL, bound density)
+    - 0.05 to 3, one value per array (labels)
+    - blue inner cell grows,
+    - red outer cells do not; other adhesion parameters at their defaults
+  0082:
+    lines:
+    - cell_adhesion  tether stiffness kappa
+    - 0.3 to 30, one value per array (labels)
+    - blue inner cell grows,
+    - red outer cells do not; other adhesion parameters at their defaults
+  0083:
+    lines:
+    - bond_binding  unbinding rate k_off
+    - 0.0003 to 3, one value per array (labels)
+    - blue inner cell grows,
+    - red outer cells do not; other adhesion parameters at their defaults
+  0084:
+    lines:
+    - bond_binding  bond strength (bond_strength, the Bell force scale)
+    - 0.05 to 30, one value per array (labels)
+    - blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults
+  0085:
+    lines:
+    - bond_springs  bond range (bond_range, the longest bonded distance)
+    - 0.2 to 0.7, one value per array (labels)
+    - blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults
+  0086:
+    lines:
+    - bond_binding  adhesion maximum rho* (LL, bound density)
+    - 0.05 to 3, one value per array (labels)
+    - blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults
+  0087:
+    lines:
+    - bond_springs  bond stiffness (bond_stiffness, the tether spring constant)
+    - 0.3 to 30, one value per array (labels)
+    - blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults
+  0088:
+    lines:
+    - bond_binding  unbinding rate (unbinding_rate)
+    - 0.0003 to 3, one value per array (labels)
+    - blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults
+  0089:
+    lines:
+    - bond_binding  binding rate (binding_rate)
+    - 0.03 to 30, one value per array (labels)
+    - blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults
+  0090:
+    lines:
+    - bond_springs  bond rest length (bond_rest_length)
+    - 0 to 0.5, one value per array (labels)
+    - blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults
+  0091:
+    lines:
+    - the outer cells  outer cell stiffness (Young's modulus)
+    - 5 to 400, one value per array (labels)
+    - blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults
+  0092:
+    lines:
+    - bond_springs  bond damping (bond_damping)
+    - 0 to 30, one value per array (labels)
+    - blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults
+  0093:
+    lines:
+    - the outer cells  outer cell stiffness (Young's modulus)
+    - 5 to 400, one value per array (labels)
+    - blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults
+  0094:
+    lines:
+    - bond_binding  adhesion maximum rho* (LL, bound density)
+    - 0.05 to 3, one value per array (labels)
+    - blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults
+  0095:
+    lines:
+    - bond_springs  bond stiffness (bond_stiffness, the tether spring constant)
+    - 0.3 to 30, one value per array (labels)
+    - blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults
+  0108:
+    lines:
+    - the outer cells  outer cell stiffness (Young's modulus)
+    - 5 to 400, one value per sphere (labels)
+    - 1000 points per cell; blue cell grows and divides in a sphere of 20 red cells
+  0109:
+    lines:
+    - bond_springs  bond damping (bond_damping)
+    - 0 to 30, one value per sphere (labels)
+    - 1000 points per cell; blue cell grows and divides in a sphere of 20 red cells
+  '0110':
+    lines:
+    - bond_binding  adhesion maximum rho* (LL, bound density)
+    - 0.05 to 3, one value per sphere (labels)
+    - 1000 points per cell; blue cell grows and divides in a sphere of 20 red cells
+  '0111':
+    lines:
+    - bond_springs  bond stiffness (bond_stiffness, the tether spring constant)
+    - 0.3 to 30, one value per sphere (labels)
+    - 1000 points per cell; blue cell grows and divides in a sphere of 20 red cells
+  '0112':
+    lines:
+    - bond_binding  unbinding rate (unbinding_rate)
+    - 0.0003 to 3, one value per sphere (labels)
+    - 1000 points per cell; blue cell grows and divides in a sphere of 20 red cells
+  '0113':
+    lines:
+    - bond_binding  bond strength (bond_strength, the Bell force scale)
+    - 0.05 to 30, one value per sphere (labels)
+    - 1000 points per cell; blue cell grows and divides in a sphere of 20 red cells
+  '0114':
+    lines:
+    - bond_binding  binding rate (binding_rate)
+    - 0.03 to 30, one value per sphere (labels)
+    - 1000 points per cell; blue cell grows and divides in a sphere of 20 red cells
+  '0115':
+    lines:
+    - bond_springs  bond range (bond_range, the longest bonded distance)
+    - 0.1 to 0.35, one value per sphere (labels)
+    - 1000 points per cell; blue cell grows and divides in a sphere of 20 red cells
+  '0116':
+    lines:
+    - bond_springs  bond rest length (bond_rest_length)
+    - 0 to 0.25, one value per sphere (labels)
+    - 1000 points per cell; blue cell grows and divides in a sphere of 20 red cells
+  0118:
+    lines:
+    - 'twin of movie 34 with 1000 points per cell (movie 34: 125)'
+    - whole sphere, cells opaque
+    - doubles every 80 min, divides at 2x birth mass; surface threshold 0.3
+  0119:
+    lines:
+    - nucleus stiffness over the cytoplasm's (cell Young's modulus 20)
+    - 1 to 20, one value per cell (labels)
+    - 1000 points per cell, nucleus 400 (blue), cells translucent; both grow and divide
+  '0122':
+    lines:
+    - nucleus share of the cell's points (0.4 = 400 of 1000)
+    - 0.05 to 0.8, one value per cell (labels)
+    - 1000 points per cell; nucleus 4x stiffer (blue); both grow and divide
+  '0123':
+    lines:
+    - cell Young's modulus (the nucleus is 4x stiffer)
+    - 5 to 400, one value per cell (labels)
+    - 1000 points per cell; nucleus 400 points, 4x stiffer (blue); both grow and divide
+  '0124':
+    lines:
+    - cell Maxwell relaxation time (min)
+    - 0.2 to 1000, one value per cell (labels)
+    - 1000 points per cell; nucleus 400 points, 4x stiffer (blue); both grow and divide
+  '0125':
+    lines:
+    - step 23 with the cadherin junction (cads)
+    - bonds bound one by one, weighted by the rig's bound fraction vs the cleft
+    - 44 nm best cleft, calcium-bound MPM rods, smoothed 4 nm
+  '0126':
+    lines:
+    - step 23 with the cadherin junction (cad)
+    - bonds bound one by one, weighted by the rig's bound fraction vs the cleft
+    - 44 nm best cleft, calcium-bound MPM rods
+  '0127':
+    lines:
+    - 'two cells at 0.2 um point spacing: the cadherin junction'
+    - 125,000 points per cell, 10 um cells touching along a face
+    - bonds bound one by one; bound density of the junction (right)

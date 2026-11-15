@@ -1,0 +1,4 @@
+- video name: 0003
+- description: The simulation shows a dense collection of multi-colored particles interacting and moving within a confined space. A horizontal layer of orange and red structures acts as a semi-permeable barrier or membrane. Over time, the particles below the membrane shift and rearrange their positions while maintaining a high density. The overall motion appears to be a stochastic or fluid-like diffusion of the various bodies.
+- objects: The scene contains large purple, pink, and yellow ellipsoidal bodies of varying sizes. Smaller teal and green spherical particles are interspersed throughout the lower region. A distinct horizontal band consists of orange and red rounded structures forming a chain-like membrane. Above this membrane, blue and teal irregular shapes are distributed in a less dense arrangement.
+

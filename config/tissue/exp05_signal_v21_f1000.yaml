@@ -1,0 +1,69 @@
+general:
+  name: exp05_signal_v21_f1000
+  seed: 1
+  n_frames: 36000
+  dt: 0.02
+  record_cap: 1001
+  boundary: free
+  dim: 3
+  world: [30.0, 30.0, 30.0]
+  units: {length_um: 10.0, time_s: 600.0}
+sets:
+  cell:
+    n: 20
+    buffer: 1000
+    types:
+      quiet: {fraction: 0.5}
+      active: {fraction: 0.5}
+    state:
+      pos: {width: 3, role: coordinate, integration: first_order, boundary: world}
+      size: {width: 1}
+      contacts: {width: 1}
+      founder: {width: 1}
+      chem: {width: 2, integration: first_order}
+fields: {}
+seed:
+- {op: seed_positions, at: cell, mode: ball, radius: 10.0, seed: 1}
+- {op: seed_cell_chem, model: noise, at: cell, noise: 0.1, seed: 1}
+operators:
+- {op: radius_graph, at: cell, radius: 1.1}
+- op: cell_chem_diffuse
+  at: cell
+  implementation: graph_laplacian
+  chi: 1.0
+  d: [0.01, 0.3]
+- {op: cell_chem_react, at: cell, model: gierer_meinhardt, rate: 0.4, gm_rho: 1.0, mu_a: 1.0, mu_h: 1.0, a0: 0.01, sat: 0.1}
+- {op: thermal_bath, at: cell, kT: 0.045, mobility: 1.0, seed: 1}
+- {op: pair_potential, model: soft_adhesive, at: cell, sigma: 1.0, epsilon: 20.0, adhesion: 0.6, tail: 0.2, mobility: 1.0}
+- {op: cell_divide, implementation: point_adhesion, at: cell, rate: 0.00578, touch: 1.1, min_contacts: 2, offset: 0.5, size_cv: 0.1, seed: 1, signal_block: chem,
+  signal_channel: 0, signal_min: 0.8}
+- op: cell_fate
+  at: cell
+  block: chem
+  channel: 0
+  thresholds: [0.8]
+  types: [quiet, active]
+schedule: [radius_graph, cell_chem_diffuse, cell_chem_react, thermal_bath, pair_potential, cell_divide, cell_fate]
+plotting:
+  renderer: vtk_points
+  subject: cell
+  dot_radius: {quiet: 0.5, active: 0.5}
+  glyphs_only: true
+  colors: {quiet: '#6b7f99', active: '#c8805a'}
+  background: '#8d99a6'
+  foreground: white
+  box_frame: false
+  camera: {elev: 25, azim: 30}
+  zoom: 2.2
+  duration_s: 10
+  slow_motion: 1
+  real_time: false
+  curve_time: {per_frame_s: 0.0033333, unit: s}
+  curve:
+  - quantity: count:cell
+    ylabel: cells
+    xlabel: time (h)
+    ymin: 0
+    ymax: 400
+    colors: ['#6b7f99', '#c8805a']
+    labels: [quiet, active]

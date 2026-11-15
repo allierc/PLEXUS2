@@ -1,0 +1,4 @@
+- video name: 0007
+- description: The simulation shows a dense collection of multi-colored particles interacting within a confined space. A horizontal orange chain-like structure acts as a boundary or barrier between two distinct regions. Over time, the particles undergo complex motions, shifting positions and changing their local density. The overall system maintains a high degree of kinetic activity as the bodies move and collide.
+- objects: The scene contains numerous irregularly shaped particles in shades of purple, pink, yellow, blue, and green. A prominent orange chain of interconnected spheres forms a linear horizontal barrier across the center. Small green spheres are scattered throughout the lower region, appearing much smaller than the larger blob-like bodies. The upper region features a different distribution of blue and teal particles separated from the lower mass by the orange structure.
+

@@ -1,0 +1,4 @@
+time   2026-10-30 08:45:55
+spec   exp01_rps_v1
+run    graphs_data/si_material/exp01_rps_v1 (cluster, LSF 155145298)
+why    ParticleGraph RD_RPS_3: rock-paper-scissors reaction-diffusion, three species on the config's 100 x 100 periodic grid, predation 0.6, diffusion 0.02 to 0.05 in the four quadrants of pics_quadrants, random start, 4,000 frames of 0.05, run on the gpu_l4 queue

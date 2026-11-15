@@ -1,0 +1,4 @@
+time   2026-10-30 11:49:22
+spec   exp01_arbitrary3_v2
+run    graphs_data/si_material/exp01_arbitrary3_v2 (cluster, LSF 155149328)
+why    ParticleGraph arbitrary_3_3 (attraction-repulsion, three types) with a fading trail behind every dot (plotting.trail, the last 40 positions, cut where a dot wraps across the periodic seam: the first version drew a straight line across the box at every wrap): 4,800 particles in a periodic unit box, three types of 1,600 with the config's four force-law parameters per type, interaction radius 0.075 and sigma 0.005, first-order motion, 250 frames of 0.1; run on the gpu_l4 queue

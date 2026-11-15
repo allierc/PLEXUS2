@@ -1,0 +1,1255 @@
+"""External, generic plotting
+
+`plexus.plot` is the ONLY place matplotlib lives. It reads a generated trajectory
+(graphs_data/<type>/<name>/trajectory.npz) plus the spec's `plotting:` style block
+and renders **generically over the sets present in the data** -- it never branches
+on an operator or model name. A new simulation gets figures for free as long as it
+writes the standard trajectory layout (`<set>__pos`, `<set>__occ`, optional
+`<set>__node_type`).
+
+Dispatch = data structure (which sets exist, do they carry a type) + declared
+style (colormap, point size). New entity semantics (orientation arrows, fields as
+heatmaps) plug in here as additional generic branches, not per-model code.
+
+Figures land next to the data, in the dataset directory.
+"""
+from __future__ import annotations
+
+import os
+import itertools
+
+import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from matplotlib.collections import PolyCollection
+
+from plexus.schema import Spec
+from plexus.paths import get_repo_root, graphs_data_path
+from plexus.models.registry import get_entity
+import plexus.models.entities  # noqa: F401  register entity render hints
+from plexus.models.entities import DEFAULT_RENDER
+
+
+# _sets_in: Set names present in a trajectory file (keys '<set>__pos') -> list.
+def _sets_in(npz) -> list[str]:
+    """Set names present in a trajectory file (keys '<set>__pos')."""
+    return sorted({k[:-len("__pos")] for k in npz.files if k.endswith("__pos")})
+
+
+# _fields_in: Field names present in a trajectory file (keys '<field>__grid') -> list.
+def _fields_in(npz) -> list[str]:
+    """Field names present in a trajectory file (keys '<field>__grid')."""
+    return sorted({k[:-len("__grid")] for k in npz.files if k.endswith("__grid")})
+
+
+# _composite: A [C, nx, ny] field + [C, 3] channel colours -> [ny, nx, 3] RGB image.
+def _composite(frame, colors, gamma=0.7, stops=None):
+    """[C, nx, ny] field + [C, 3] channel colours -> [ny, nx, 3] RGB image.
+
+    With `stops` (`plotting.field_cmap: {<field>: [[r, g, b], ...]}`) channel 0 is not a brightness but a position along a colour ramp, linear between the evenly spaced
+    stops, 0 at the first and 1 at the last; the other channels are added on top in their own colours."""
+    C, nx, ny = frame.shape
+    if stops is not None:
+        st = np.asarray(stops, np.float32)
+        x = np.clip(frame[0].T, 0.0, 1.0) * (len(st) - 1)
+        i0 = np.clip(np.floor(x).astype(int), 0, len(st) - 2)
+        f = (x - i0)[:, :, None]
+        rgb = st[i0] * (1.0 - f) + st[i0 + 1] * f
+        for c in range(1, C):
+            rgb = rgb + frame[c].T[:, :, None] * colors[c][None, None, :]
+        return np.clip(rgb, 0, 1)
+    rgb = np.zeros((ny, nx, 3), np.float32)
+    for c in range(C):
+        rgb += frame[c].T[:, :, None] * colors[c][None, None, :]
+    return np.clip(rgb, 0, 1) ** gamma                # gamma lifts faint trails
+
+
+# RENDERERS: The renderers reachable from a plot; one key, `plotting.renderer`, resolved in one place and printed on every run (unset: the default is derived from what the data contains, with the reason). Before, four were reachable and nothing in a spec named any (`plotting.panels`, the presence of a mesh set and the dimension each picked one) and `live_movie` was not reachable from `-o plot`, so a 3D point set was drawn one way while computed and another afterwards.
+RENDERERS = {
+    "vtk_points": "VTK point cloud (plexus.live_movie) -- real dots, obstacles, box, scale bar",
+    "vtk_mesh":   "VTK surface mesh (plexus.render_vtk) -- depth-buffered, lit",
+    "mpl2d":      "matplotlib scatter movie -- planar runs",
+    "splat3d":    "numpy gaussian splat -- soft blobs, no obstacles (legacy)",
+    "panels":     "two-panel composition (tools/cell_panels) -- domain + cross-sectioned body",
+    "none":       "no figures",
+}
+
+
+# _resolve_renderer: `plotting.renderer` if declared, else the default the data implies -> (renderer, why).
+def _resolve_renderer(sim, d) -> tuple[str, str]:
+    """(renderer, why). `plotting.renderer` if declared, else the default the data implies."""
+    style = sim.plotting or {}
+    want = str(style.get("renderer", "") or "").strip().lower()
+    if want:
+        if want not in RENDERERS:
+            raise ValueError(
+                f"plotting.renderer: {want!r} is not one of {', '.join(sorted(RENDERERS))}")
+        return want, "declared in plotting.renderer"
+    if style.get("panels"):
+        return "panels", "plotting.panels is set"
+    if any(k.endswith("__mesh_nF") for k in d.files):
+        return "vtk_mesh", "a mesh set is present"
+    dims = {int(d[k].shape[2]) for k in d.files if k.endswith("__pos") and d[k].ndim == 3}
+    if dims == {2}:
+        return "mpl2d", "every set is planar"
+    if 3 in dims:
+        return "vtk_points", "a 3D point set (default)"
+    return "mpl2d", "no 3D point set"
+
+
+# _render_meta: Render hints for a set (how to colour and draw it) from the entity registry -> dict.
+def _render_meta(sname: str) -> dict:
+    """Render hints for a set, from the entity registry (how to color/draw it)."""
+    try:
+        return getattr(get_entity(sname), "RENDER", None) or DEFAULT_RENDER
+    except KeyError:
+        return DEFAULT_RENDER
+
+
+# _typed_palette: Per-type RGB and per-type size factor of a set, from the spec -> (palette [K, 3] | None, size_factor [K] | None).
+def _typed_palette(sim, sname: str, style: dict):
+    """Per-type RGB and per-type size factor for a set, from the spec.
+
+    `plotting.colors` (type_name -> rgb) gives an explicit palette -- e.g. the
+    ParticleGraph charge code {q_p2: [1,1,1], ...}; missing names fall back to white.
+    `plotting.size_by: <prop>` scales point size by |type prop| (e.g. charge), mapped
+    to ~0.5x..1.8x. Both are ordered by the set's declared type order so a node_type
+    index selects directly. Returns (palette [K,3] | None, size_factor [K] | None)."""
+    types = ((getattr(sim, "sets", {}) or {}).get(sname, {}) or {}).get("types", {}) or {}
+    names = list(types.keys())
+    if not names:
+        return None, None
+    from matplotlib.colors import to_rgb
+    cmap_colors = style.get("colors")
+    pal = None
+    if cmap_colors:
+        # a colour may be a triple or a name, and `tuple()` destroys the second kind (`tuple("#2f6fb5")` is a 7-character tuple that `to_rgb` rejects, and the caller then coloured by height): `to_rgb` understands "#2f6fb5", "tab:blue" and "red"; only a list needs converting
+        def _rgb(v):
+            return to_rgb(tuple(v)) if isinstance(v, (list, tuple, np.ndarray)) else to_rgb(v)
+        pal = np.array([_rgb(cmap_colors[nm]) if nm in cmap_colors else (1.0, 1.0, 1.0)
+                        for nm in names], np.float32)
+    size_by = style.get("size_by")
+    sf = None
+    if size_by:
+        vals = np.array([abs(float(types[nm].get(size_by, 1.0))) for nm in names], np.float32)
+        vmax = float(vals.max()) if vals.size else 1.0
+        sf = 0.5 + 1.3 * (vals / (vmax + 1e-9))      # |prop| -> 0.5x .. 1.8x point size
+    return pal, sf
+
+
+# _point_size: Scatter `s`: an explicit `point_size` wins, else it is MEASURED from the spacing -> float.
+def _point_size(style: dict, n: int, pos=None, span=None, fig_px=None, dpi=None) -> float:
+    """Scatter `s`. An explicit `point_size` wins; otherwise it is MEASURED from the spacing: `plexus.live.dot_area_pt2` uses the median nearest-neighbour distance, so a dot spans `dot_fill` of the local spacing and the snapshot and the movie agree. The old count table (8.0 under 4,000 points, 4.0 under 12,000, 2.0 above) knew nothing of the area the points occupy and changed dot size mid-run as a growing tissue crossed a step; it stays as the fallback for callers with no positions to measure."""
+    if "point_size" in style:
+        return float(style["point_size"])
+    if pos is not None and span:
+        from plexus.live import dot_area_pt2
+        return dot_area_pt2(pos, span, fig_px, dpi, fill=float(style.get("dot_fill", 0.9)))
+    return 8.0 if n <= 4000 else (4.0 if n <= 12000 else 2.0)
+
+
+# _frame_dir: Per-particle unit heading at frame i from the local displacement -> [N, 2].
+def _frame_dir(pos, i, periodic, world):
+    """Per-particle unit heading at frame i, from the local displacement
+    (pos[i] - pos[i-1]); minimum-image under periodic BC. Used to orient triangles."""
+    a = max(i - 1, 0); b = a + 1 if pos.shape[0] > 1 else 0
+    d = (pos[b] - pos[a]).astype(np.float32)
+    if periodic:
+        W = np.asarray(world, np.float32) if np.ndim(world) else np.array([world, 1.0], np.float32)
+        d = d - W * np.round(d / W)
+    n = np.linalg.norm(d, axis=1, keepdims=True)
+    return np.where(n > 1e-9, d / np.clip(n, 1e-9, None), np.array([1.0, 0.0], np.float32))
+
+
+# _triangle_verts: Oriented triangle vertices, tip a distance L along heading u -> [N, 3, 2].
+def _triangle_verts(xy, u, L, wbase):
+    """Oriented triangle vertices [N,3,2]: tip a distance L along heading u, base wbase."""
+    perp = np.stack([-u[:, 1], u[:, 0]], axis=1)
+    tip = xy + L * u
+    base_l = xy - 0.5 * L * u + 0.5 * wbase * perp
+    base_r = xy - 0.5 * L * u - 0.5 * wbase * perp
+    return np.stack([tip, base_l, base_r], axis=1)
+
+
+# plot_dataset: Render a generated simulation's trajectory into its dataset directory -> the directory written to.
+def plot_dataset(sim: Spec, pre_folder: str, movie: bool = False) -> str:
+    """Render a generated simulation's trajectory into its dataset directory.
+    Returns the directory written to."""
+    folder = pre_folder.rstrip("/")
+    data_dir = graphs_data_path(folder, sim.name)
+    npz_path = os.path.join(data_dir, "trajectory.npz")
+    if not os.path.isfile(npz_path):
+        raise FileNotFoundError(f"no trajectory at {npz_path} (run `-o generate` first)")
+    d = np.load(npz_path)
+
+    # one figure instead of a pile, when the spec asks: `plotting.panels: true` renders the two-panel composition view and returns (the default path draws one mp4 and two figures PER SET, nine files for nucleus + cytosol + membrane, none showing the cell: the panels are the domain, where the cell is in its box, and the cell zoomed with a cross section, what it is made of)
+    which, why = _resolve_renderer(sim, d)
+    print(f"[plot] renderer: {which} -- {RENDERERS[which]}  ({why})", flush=True)
+    if which == "none":
+        return data_dir
+
+    # the VTK point renderer, which every MPM movie is made with: reached by replaying the trajectory through the SAME class as the live hook (one point renderer, not two that drift); falls back to the splat rather than taking a plot down (a headless node with no GL is a real configuration)
+    if which == "vtk_points":
+        from plexus import render_vtk
+        if render_vtk.available():
+            from plexus import live_movie
+            st = sim.plotting or {}
+            # a replay cannot draw a deformation colour and must not overwrite one that was drawn: `trajectory.npz` stores positions, occupancy and the mesh but not F and C, so the cloud would fall back to the t = 0 height ramp, replacing the correctly rendered live movie with a static gradient that looks like data; the live pass already wrote the right one, leave it
+            _cf = str(st.get("color_field", "") or "").lower()
+            if _cf in ("deformation", "strain", "volume", "pressure", "vorticity") \
+                    and os.path.isfile(os.path.join(data_dir, "movie.mp4")):
+                print(f"[plot] movie.mp4 KEPT as the live pass rendered it: plotting.color_field "
+                      f"is {_cf!r}, which needs the per-particle deformation gradient a trajectory "
+                      f"does not store. Replaying would redraw it as a height ramp.", flush=True)
+                return data_dir
+            live_movie.replay(data_dir, sim,
+                              max_frames=int(st.get("movie_max_frames", 300)),
+                              render_n=int(st.get("render_n", 500_000_000)),
+                              # 10, not 0: `-o plot` rewrites `movie.mp4` and used to leave `3d.png` as the generation wrote it, so the two disagreed about the same run
+                              stills=int(st.get("stills", 10)), name=sim.name)
+            return data_dir
+        print("[plot] renderer vtk_points asked for but pyvista did not import -- falling back to "
+              "splat3d, which has no obstacles and no depth buffer", flush=True)
+        which = "splat3d"
+
+    if which == "panels":
+        import sys as _sys
+        _t = os.path.join(get_repo_root(), "tools")
+        if _t not in _sys.path:
+            _sys.path.insert(0, _t)
+        from cell_panels import panels as _panels, panels_movie as _panels_movie
+        _ax = (sim.plotting or {}).get("panels_axis", "auto")
+        _th = float((sim.plotting or {}).get("panels_thick", 0.10))
+        _dot = float((sim.plotting or {}).get("panels_dot", 3.0))
+        _dots = float((sim.plotting or {}).get("panels_dot_section", 7.0))
+        _panels(data_dir, axis=_ax, thick=_th, dot=_dot, dot_section=_dots)   # final frame, still
+        # and the sequence: a still of the last frame answers nothing about a run that moves (a dropped cell's final frame is a ball on the floor, equally consistent with falling, bouncing or never moving); `movie` is honoured so `-o plot` without it stays a one-second operation
+        if movie:
+            _panels_movie(data_dir, axis=_ax, thick=_th, dot=_dot, dot_section=_dots,
+                          max_frames=int((sim.plotting or {}).get("panels_frames", 150)),
+                          fps=int((sim.plotting or {}).get("fps", 20)))
+        print(f"[plot] panels -> {data_dir}", flush=True)
+        return data_dir
+
+    # VTK is the renderer for a mesh set: `mplot3d` has no depth buffer (it sorts polygons by mean z), which is wrong for a closed cellular surface (on b_star's end frame 6,124 of 12,272 apical faces face away and are drawn anyway); VTK discards a fragment behind another per pixel, is ~29x faster (0.32 s a frame against 9.33) and lights it properly (28.9% of pixels lit against 4.5%). Only for a mesh set and only when pyvista imports (a 2D spec has nothing to z-buffer, and a headless node with no GL must not take a generation down): both fall through to the matplotlib path
+    if which == "vtk_mesh":
+        from plexus import render_vtk
+        if render_vtk.available():
+            render_vtk.use_plotting(sim.plotting or {})   # the live config, not the run's frozen copy
+            render_vtk.still(data_dir, style="flat",
+                             out=os.path.join(data_dir, "3d.png"), name=sim.name)
+            if movie:
+                render_vtk.render_all(data_dir, seq=int((sim.plotting or {}).get("vtk_seq", 2)),
+                                      name=sim.name)
+            return data_dir
+        print("[plot] a mesh set is present but pyvista did not import -- falling back to "
+              "matplotlib, which has no depth buffer and will draw far-side faces", flush=True)
+
+    style = sim.plotting or {}
+    cmap = plt.get_cmap(style.get("colormap", "tab10"))
+    bg = style.get("background", "white")             # figure/axes background colour
+    mov_fps = int(style.get("fps", 25))               # movie playback fps (plotting.fps): LOWER = slower
+    mov_maxf = int(style.get("movie_max_frames", 120))  # frames kept in a movie (more = smoother slow-mo)
+    W = float(d["world"]) if "world" in d.files else sim.world
+    world_size = d["world_size"] if "world_size" in d.files else None   # per-axis box (3D splat)
+    obstacles = list(getattr(sim, "obstacles", []) or [])   # wall geometry to overlay (grey)
+
+    hide = set(style.get("hide_sets", []) or [])     # sets to skip plotting (e.g. MPM `cell` centroids)
+    for sname in _sets_in(d):
+        if sname in hide:
+            continue
+        pos = d[f"{sname}__pos"]                      # [T, N, 2]
+        occ = d[f"{sname}__occ"]                      # [T, N]
+        cby = _render_meta(sname).get("color_by")     # which per-node field colors the points
+        nt = d[f"{sname}__{cby}"] if (cby and f"{sname}__{cby}" in d.files) else None
+        T, N, D = pos.shape[0], pos.shape[1], pos.shape[2]
+        # explicit per-type palette (`plotting.colors`, e.g. the ParticleGraph charge code) and size factor (`plotting.size_by: <prop>`)
+        pal, sf = _typed_palette(sim, sname, style)
+        size_scale = (sf[nt % len(sf)] if (sf is not None and nt is not None) else None)
+        # 3D set: the orbiting 3D gaussian splat; `renderer: mpl2d` on a 3D run requests the xy PROJECTION, the right picture when the third axis is thin (a disc, a monolayer)
+        if D == 3 and which != "mpl2d":
+            box = (np.asarray(world_size, np.float32) if world_size is not None
+                   and len(world_size) == 3 else np.array([W, 1.0, 1.0], np.float32))
+            # up-axis: the splat camera takes world axis 2 (z) as screen-vertical; a scene with gravity on another axis (MPM gravity is on axis 1 = y) sets `plotting.up_axis` so the fall renders vertical, not as a sideways drift (default 2 = no-op)
+            obs_src = list(getattr(sim, "obstacles", []) or [])   # 3D obstacles (box[6]/sphere[4]) in world coords
+            up = int(style.get("up_axis", 2))
+            obs3 = obs_src
+            if up != 2:
+                perm = [a for a in (0, 1, 2) if a != up] + [up]
+                pos = pos[..., perm].copy(); box = box[perm]
+                pos[..., 2] = box[2] - pos[..., 2]    # mirror so -up (gravity) points DOWN on screen
+                b2 = float(box[2])                    # transform obstacles by the same perm + vertical mirror
+                obs3 = []
+                for o in obs_src:
+                    v = [float(x) for x in o]
+                    if len(v) == 6:
+                        lo = [v[:3][perm[k]] for k in range(3)]; hi = [v[3:6][perm[k]] for k in range(3)]
+                        obs3.append([lo[0], lo[1], b2 - hi[2], hi[0], hi[1], b2 - lo[2]])
+                    elif len(v) == 4:
+                        c = [v[:3][perm[k]] for k in range(3)]
+                        obs3.append([c[0], c[1], b2 - c[2], v[3]])
+            # auto-frame: if the cloud escaped the world box (a `free` run), re-centre and size the render to the trajectory's own extent (+margin); a bounded run is left as before
+            flat = pos.reshape(-1, D)
+            # `frame_percentile: p` frames to the CENTRAL p% of the particles, so a handful of escapers cannot set the scale (a galaxy encounter throws ~20% of its stars out to several times the size worth looking at: the two discs came out 130 px wide in an 820 px frame); unset = the absolute extent
+            fp = style.get("frame_percentile")
+            if fp is not None:
+                q = 0.5 * (100.0 - float(fp))
+                lo = np.percentile(flat, q, axis=0).astype(np.float32)
+                hi = np.percentile(flat, 100.0 - q, axis=0).astype(np.float32)
+                box = ((hi - lo) * 1.06).astype(np.float32)
+                pos = pos - 0.5 * (lo + hi)[None, None, :] + 0.5 * box[None, None, :]
+                # and NOT the extent test below: the escapers are exactly what this excluded, so re-measuring min / max would hand the frame back to them
+            else:
+                lo, hi = flat.min(0), flat.max(0)
+                extent = (hi - lo).astype(np.float32)
+                if bool((extent > box * 1.02).any()):
+                    box = extent * 1.06
+                    pos = pos - 0.5 * (lo + hi)[None, None, :] + 0.5 * box[None, None, :]
+            # colour by own type (charge palette), else by PARENT cell through the parent set's type palette, so a contained MPM set inherits its material colour (jelly / water / snow), falling back to a distinct hue per parent body
+            par = d[f"{sname}__parent"] if f"{sname}__parent" in d.files else None
+            if pal is not None and nt is not None:
+                color3 = pal[nt % len(pal)]
+            elif par is not None:
+                pname = str(d[f"{sname}__parent_name"]) if f"{sname}__parent_name" in d.files else None
+                ppal = (_typed_palette(sim, pname, style)[0] if pname else None)
+                pnt = d[f"{pname}__node_type"] if (pname and f"{pname}__node_type" in d.files) else None
+                if ppal is not None and pnt is not None:
+                    color3 = ppal[pnt[par] % len(ppal)]   # per-particle: parent cell's material colour
+                else:
+                    color3 = cmap(par % cmap.N)           # distinct hue per parent body
+            else:
+                color3 = cmap(nt % cmap.N) if nt is not None else None
+            _splat3d_outputs(pos, occ, _point_rgb(color3, N), box, data_dir, sname, style,
+                             movie, T, size_scale=size_scale, obstacles=obs3)
+            continue
+        s = _point_size(style, N)
+        if size_scale is not None:                    # scale point area by |type prop| (charge)
+            s = s * size_scale
+        # colour leaves by their PARENT cell when contained (distinguishes bodies and reveals mixing), else by node_type
+        par = d[f"{sname}__parent"] if f"{sname}__parent" in d.files else None
+        if pal is not None and nt is not None:
+            color = pal[nt % len(pal)]                # explicit per-type colours (charge code)
+        elif par is not None:
+            # inherit the parent cell's TYPE palette (material colour) if one is defined, else a distinct hue per parent body
+            pname = str(d[f"{sname}__parent_name"]) if f"{sname}__parent_name" in d.files else None
+            ppal = (_typed_palette(sim, pname, style)[0] if pname else None)
+            pnt = d[f"{pname}__node_type"] if (pname and f"{pname}__node_type" in d.files) else None
+            if ppal is not None and pnt is not None:
+                color = ppal[pnt[par] % len(ppal)]
+            else:
+                color = cmap(par % cmap.N)
+        elif nt is not None:
+            color = cmap(nt % cmap.N)
+        else:
+            color = None
+        # the chemistry wins when there is any: without it the set fell to `color = None` and `_movie` drew every element in "#1f77b4" (a two-species Turing disc as uniform blue while the live `2d.png` drew the pattern); same law, one function, `plexus.live.chem_rgb`. `plotting.color_by: chem` is opt-in for a segmentation-seeded sheet (exp 6), where the chemistry lives on `cell` and its material points carry none: without it `cell` is a container drawn as merged blobs in one hue per cell id and the movie is static confetti whatever `chem` does; with it a one-column `chem` is drawn too, the set is drawn as its own dots in that colour, and a set with no `chem` whose PARENT has one takes the parent's colour per frame via `<set>__parent`
+        _cby_chem = str(style.get("color_by", "") or "").lower() == "chem"
+        _chem_drawn = False
+        _csrc = sname if f"{sname}__chem" in d.files else None
+        if _cby_chem and _csrc is None and par is not None and f"{sname}__parent_name" in d.files:
+            _pn = str(d[f"{sname}__parent_name"])
+            _csrc = _pn if f"{_pn}__chem" in d.files else None
+        if _csrc is not None:
+            from plexus.live import chem_rgb
+            _ch = np.asarray(d[f"{_csrc}__chem"])
+            if _ch.ndim == 3 and _ch.shape[2] >= (1 if _cby_chem else 2):
+                _cf = [chem_rgb(_ch[t], lut=style.get("species"),
+                                blend=style.get("blend"),
+                                background=style.get("background", "black"),
+                                vmax=style.get("chem_max"))[0]
+                       for t in range(_ch.shape[0])]
+                if all(x is not None for x in _cf):
+                    color = np.stack(_cf)              # [T, N, 3] -- per FRAME, not per node
+                    if _csrc != sname:                 # the parent's colour, gathered per child
+                        color = color[:, np.clip(np.asarray(par, np.int64), 0, color.shape[1] - 1)]
+                    bg = "black"
+                    _chem_drawn = True
+        # a container set (parent of a denser child set) is drawn as its MERGED child cloud, coloured by parent cell and fused into one smooth blob per cell, not a bare centroid dot
+        container = None if (_cby_chem and _chem_drawn) else _container_child(d, sname)
+        # per-parent MATERIAL colour from the type palette, so a merged cell <- MPM cloud paints each cell its `plotting.colors` hue (e.g. viscoelastic = purple), not a colormap-by-parent hue
+        parent_rgb = None
+        if container is not None and pal is not None and f"{sname}__node_type" in d.files:
+            ntc = d[f"{sname}__node_type"]            # the cell set's material type per cell
+            _, _, _ncell = container
+            parent_rgb = np.array([pal[int(ntc[c]) % len(pal)][:3] for c in range(_ncell)])
+        # marker style: dots (default) or thin-line colour triangles oriented along the heading (the local displacement), showing flow direction for flocks and active matter
+        marker = str(style.get("marker", "dot"))
+        tri_L = float(style.get("triangle_size", 0.016))           # triangle length (world units)
+        tri_w = float(style.get("triangle_width", tri_L * 0.62))   # base width
+        tri_lw = float(style.get("triangle_lw", 0.6))              # outline thickness
+        periodic = (getattr(sim, "boundary", "wall") == "periodic")
+        wsize = getattr(sim, "world_size", [W, 1.0])
+        # the true 2D world box: frame the axes to [0, wx] x [0, wy] with equal aspect, so a square world (a galaxy's [6, 6]) renders square, not as a W:1 strip clipped at y = 1
+        wx, wy = float(wsize[0]), float(wsize[1] if len(wsize) > 1 else 1.0)
+        ar = wx / wy                                   # panel aspect (width : height)
+
+        def _draw(ax, i):
+            if container is not None:
+                cpos, par, ncell = container
+                ax.imshow(_merged_rgb(cpos[i], par, ncell, W, cmap, bg=bg, parent_rgb=parent_rgb),
+                          extent=[0, W, 0, 1], origin="upper")
+                _draw_obstacles(ax, obstacles)
+                ax.set_xlim(0, W); ax.set_ylim(0, 1); ax.set_aspect("equal"); ax.axis("off"); return
+            live = occ[i]
+            # per-frame or per-node: a chemistry colour is [T, N, 3] and changes every frame, a type palette is [N, 3] and does not; the static montage draws frame `i` and must pick the same way as the movie, or it indexes the TIME axis with a node mask
+            c = ("#1f77b4" if color is None else
+                 (color[i][live] if np.ndim(color) == 3 else color[live]))
+            ax.set_facecolor(bg)
+            if marker == "triangle":
+                u = _frame_dir(pos, i, periodic, wsize)[live]
+                verts = _triangle_verts(pos[i, live], u, tri_L, tri_w)
+                ax.add_collection(PolyCollection(verts, facecolors="none", edgecolors=c,
+                                                 linewidths=tri_lw, closed=True))
+            else:
+                sz = (s[live] if np.ndim(s) else s)   # per-node size (e.g. ~|charge|) or scalar
+                ax.scatter(pos[i, live, 0], pos[i, live, 1], s=sz, c=c, linewidths=0)
+            _draw_obstacles(ax, obstacles)
+            ax.set_xlim(0, wx); ax.set_ylim(0, wy); ax.set_aspect("equal"); ax.axis("off")
+
+        # evolution montage
+        idx = [0, T // 5, 2 * T // 5, 3 * T // 5, T - 1]
+        fig, axes = plt.subplots(1, len(idx), figsize=(len(idx) * ar * 3.4, 3.4))
+        fig.patch.set_facecolor(bg)
+        for ax, i in zip(np.atleast_1d(axes), idx):
+            _draw(ax, i)
+        plt.tight_layout()
+        evo = os.path.join(data_dir, f"fig_{sname}_evolution.png")
+        plt.savefig(evo, dpi=100, facecolor=bg); plt.close(fig)
+
+        # final frame
+        fig, ax = plt.subplots(figsize=(6 * ar, 6))
+        fig.patch.set_facecolor(bg)
+        _draw(ax, T - 1)
+        plt.tight_layout()
+        fin = os.path.join(data_dir, f"fig_{sname}_final.png")
+        plt.savefig(fin, dpi=110, facecolor=bg); plt.close(fig)
+        print(f"[plot] {sname}: {os.path.basename(evo)}, {os.path.basename(fin)}", flush=True)
+
+        if movie:
+            if container is not None:
+                cpos, par, ncell = container
+                _merged_movie(cpos, par, ncell, W, cmap, T, os.path.join(data_dir, f"movie_{sname}"),
+                              bg=bg, obstacles=obstacles, parent_rgb=parent_rgb,
+                              fps=mov_fps, max_frames=mov_maxf)
+            else:
+                _movie(pos, occ, color, s, W, T, os.path.join(data_dir, f"movie_{sname}"),
+                       dot_fill=(None if "point_size" in style
+                                 else float(style.get("dot_fill", 0.9))),
+                       bg=bg, obstacles=obstacles, marker=marker, periodic=periodic, world=wsize,
+                       tri=(tri_L, tri_w, tri_lw), fps=mov_fps, max_frames=mov_maxf)
+
+    # continuum fields: composite the channels and draw the heatmap
+    gamma = float(style.get("gamma", 0.7))
+    fbg = style.get("background", "black")
+    for fname in _fields_in(d):
+        grid = d[f"{fname}__grid"]                     # [T, C, nx, ny] (2D) or [T,C,nx,ny,nz] (3D)
+        colors = d[f"{fname}__colors"]                 # [C, 3]
+        T = grid.shape[0]
+        _stops = (style.get("field_cmap") or {}).get(fname)
+        _fr = style.get("field_range")                 # [lo, hi] for every channel, or one [lo, hi] per channel: the values drawn from black to full colour
+        if _fr is not None and grid.ndim == 4:
+            _fr = np.asarray(_fr, np.float32)
+            _fr = np.tile(_fr, (grid.shape[1], 1)) if _fr.ndim == 1 else _fr
+            grid = (grid - _fr[None, :, 0, None, None]) / (_fr[None, :, 1, None, None] - _fr[None, :, 0, None, None])
+
+        # 3D field: volume-splat the active voxels, then move on
+        if grid.ndim == 5:
+            _field3d_outputs(grid, colors, W, data_dir, fname, style, movie, T)
+            continue
+
+        def _fdraw(ax, i):
+            ax.set_facecolor(fbg)
+            ax.imshow(_composite(grid[i], colors, gamma, _stops), origin="lower", extent=[0, W, 0, 1],
+                      interpolation="bilinear")
+            ax.set_xlim(0, W); ax.set_ylim(0, 1); ax.set_aspect("equal"); ax.axis("off")
+
+        # a STATIC field (e.g. an image-derived stiffness or direction map) is constant in time: one PNG, no evolution strip and no movie
+        static = T <= 1 or float(np.abs(grid - grid[0:1]).max()) < 1e-6
+
+        if not static:
+            idx = [0, T // 5, 2 * T // 5, 3 * T // 5, T - 1]
+            fig, axes = plt.subplots(1, len(idx), figsize=(len(idx) * W * 3.2, 3.4))
+            fig.patch.set_facecolor(fbg)
+            for ax, i in zip(np.atleast_1d(axes), idx):
+                _fdraw(ax, i)
+            plt.tight_layout()
+            evo = os.path.join(data_dir, f"fig_{fname}_evolution.png")
+            plt.savefig(evo, dpi=100, facecolor=fbg); plt.close(fig)
+
+        fig, ax = plt.subplots(figsize=(6 * W, 6)); fig.patch.set_facecolor(fbg)
+        _fdraw(ax, T - 1); plt.tight_layout()
+        fin = os.path.join(data_dir, f"fig_{fname}_final.png")
+        plt.savefig(fin, dpi=110, facecolor=fbg); plt.close(fig)
+        print(f"[plot] {fname} (field): {os.path.basename(fin)}"
+              f"{'' if static else ' (+ evolution)'}{' [static]' if static else ''}", flush=True)
+
+        if movie and not static:
+            _field_movie(grid, colors, W, os.path.join(data_dir, f"movie_{fname}"), gamma, fbg, stops=_stops)
+
+    # overlay: `plotting.overlay: true` adds one combined movie per coupled (field, set) pair, the slime trail as background with the oriented set markers over it (the triangle of a given type flowing along the slime of a given type; vicsek marker + Physarum field)
+    if movie and bool(style.get("overlay", False)):
+        _overlay_outputs(sim, d, data_dir, style, W, gamma, fbg)
+
+    print(f"[plot] figures -> {data_dir}", flush=True)
+    return data_dir
+
+
+# _overlay_outputs: For each 2D field coupled to a set, render `movie_overlay_<field>` (the field heatmap with the set's markers over it) -> list of paths.
+def _overlay_outputs(sim, d, data_dir, style, W, gamma, fbg) -> None:
+    """For each 2D field coupled to a set, render `movie_overlay_<field>`: the field
+    heatmap (imshow) with the coupled set's markers drawn on top. The field is recorded
+    at a coarser stride than the set, so each set frame maps to the proportional field
+    frame. Honours the set's `marker` (triangle/dot) and per-type palette."""
+    marker = str(style.get("marker", "dot"))
+    tL = float(style.get("triangle_size", 0.016))
+    tri = (tL, float(style.get("triangle_width", tL * 0.62)), float(style.get("triangle_lw", 0.6)))
+    periodic = (getattr(sim, "boundary", "wall") == "periodic")
+    wsize = getattr(sim, "world_size", [W, 1.0])
+    for fname in _fields_in(d):
+        grid = d[f"{fname}__grid"]
+        if grid.ndim != 4:                            # 2D fields only
+            continue
+        sname = (sim.fields or {}).get(fname, {}).get("couples_to")
+        if not sname or f"{sname}__pos" not in d.files or d[f"{sname}__pos"].shape[-1] != 2:
+            continue
+        pos, occ = d[f"{sname}__pos"], d[f"{sname}__occ"]
+        pal, _ = _typed_palette(sim, sname, style)
+        cby = _render_meta(sname).get("color_by")
+        nt = d[f"{sname}__{cby}"] if (cby and f"{sname}__{cby}" in d.files) else None
+        color = (pal[nt % len(pal)] if (pal is not None and nt is not None) else None)
+        _overlay_movie(pos, occ, color, grid, d[f"{fname}__colors"], W, gamma, fbg,
+                       os.path.join(data_dir, f"movie_overlay_{fname}"),
+                       marker=marker, tri=tri, periodic=periodic, world=wsize)
+
+
+# _overlay_movie: Trail field (imshow) + set markers (triangles / dots) over time, in one movie -> path.
+def _overlay_movie(pos, occ, color, grid, fcolors, W, gamma, fbg, out_base,
+                   marker="triangle", tri=(0.016, 0.01, 0.6), periodic=False, world=None,
+                   max_frames: int = 150) -> None:
+    """Trail field (imshow) + set markers (triangles/dots) over time, in one movie."""
+    from matplotlib.animation import FuncAnimation
+    T, Tf = pos.shape[0], grid.shape[0]
+    stride = max(1, T // max_frames)
+    frames = list(range(0, T, stride))
+    fidx = lambda i: min(int(round(i / max(T - 1, 1) * (Tf - 1))), Tf - 1)
+    fig, ax = plt.subplots(figsize=(8 * W, 8)); fig.patch.set_facecolor(fbg); ax.set_facecolor(fbg)
+    ax.set_xlim(0, W); ax.set_ylim(0, 1); ax.set_aspect("equal"); ax.axis("off")
+    fig.tight_layout(pad=0)
+    im = ax.imshow(_composite(grid[fidx(0)], fcolors, gamma), origin="lower",
+                   extent=[0, W, 0, 1], interpolation="bilinear", zorder=0)
+    tri_L, tri_w, tri_lw = tri
+    if marker == "triangle":
+        ec0 = (color[occ[0]] if color is not None else "#ffffff")
+        pc = PolyCollection(_triangle_verts(pos[0, occ[0]], _frame_dir(pos, 0, periodic, world)[occ[0]],
+                            tri_L, tri_w), facecolors="none", edgecolors=ec0, linewidths=tri_lw,
+                            closed=True, zorder=1)
+        ax.add_collection(pc)
+
+        def upd(i):
+            live = occ[i]
+            im.set_data(_composite(grid[fidx(i)], fcolors, gamma))
+            pc.set_verts(_triangle_verts(pos[i, live], _frame_dir(pos, i, periodic, world)[live], tri_L, tri_w))
+            if color is not None:
+                pc.set_edgecolor(color[live])
+            return im, pc
+    else:
+        sc = ax.scatter(pos[0, occ[0], 0], pos[0, occ[0], 1], s=4.0, linewidths=0,
+                        c=(color[occ[0]] if color is not None else "#ffffff"), zorder=1)
+
+        def upd(i):
+            live = occ[i]
+            im.set_data(_composite(grid[fidx(i)], fcolors, gamma))
+            sc.set_offsets(pos[i, live])
+            if color is not None:
+                sc.set_color(color[live])
+            return im, sc
+
+    anim = FuncAnimation(fig, upd, frames=frames, interval=50)
+    out = _save_anim(anim, out_base, fbg, dpi=200)
+    plt.close(fig)
+    print(f"[plot] overlay movie -> {os.path.basename(out)}", flush=True)
+
+
+# _ffmpeg: Locate ffmpeg, next to the running interpreter (conda env) or on PATH -> str | None.
+def _ffmpeg() -> str | None:
+    """Locate ffmpeg: next to the running interpreter (conda env) or on PATH."""
+    import sys, shutil
+    cand = os.path.join(os.path.dirname(sys.executable), "ffmpeg")
+    return cand if os.path.exists(cand) else shutil.which("ffmpeg")
+
+
+# _save_anim: Save an animation as high-quality H.264 (constant-quality CRF), gif without ffmpeg -> output path.
+def _save_anim(anim, out_base: str, bg: str, fps: int = 25, dpi: int = 150) -> str:
+    """Save an animation as high-quality H.264 (constant-quality CRF, not a fixed
+    bitrate). Thin bright structure on a dark background -- slime trails, particle
+    fields -- otherwise picks up mosquito/blocking noise at a fixed bitrate. Falls
+    back to gif when ffmpeg is absent. Returns the output path."""
+    from matplotlib.animation import FFMpegWriter, PillowWriter
+    ff = _ffmpeg()
+    if ff:
+        matplotlib.rcParams["animation.ffmpeg_path"] = ff
+        out = out_base + ".mp4"
+        anim.save(out, dpi=dpi, savefig_kwargs={"facecolor": bg},
+                  writer=FFMpegWriter(fps=fps, codec="libx264",
+                                      extra_args=["-crf", "16", "-preset", "slow",
+                                                  "-pix_fmt", "yuv420p"]))
+    else:
+        out = out_base + ".gif"
+        anim.save(out, writer=PillowWriter(fps=20), savefig_kwargs={"facecolor": bg})
+    return out
+
+
+# _draw_obstacles: Draw the world's wall geometry in grey, [x0, y0, x1, y1] rectangles and [cx, cy, r] discs -> None.
+def _draw_obstacles(ax, obstacles, color="0.45"):
+    """Draw the world's wall geometry (grey): [x0,y0,x1,y1] rectangles / [cx,cy,r] discs."""
+    from matplotlib.patches import Rectangle, Circle
+    for r in (obstacles or []):
+        v = [float(x) for x in r]
+        if len(v) == 4:
+            ax.add_patch(Rectangle((v[0], v[1]), v[2] - v[0], v[3] - v[1], color=color, zorder=3))
+        elif len(v) == 3:
+            ax.add_patch(Circle((v[0], v[1]), v[2], color=color, zorder=3))
+
+
+# _container_child: If a set is a container (another set names it as parent and has more nodes) -> (child_pos [T, Nc, 2], parent_idx [Nc], ncell), else None.
+def _container_child(d, sname: str):
+    """If `sname` is a container -- some set names it as `parent_name` and has more
+    nodes -- return (child_pos[T,Nc,2], parent_idx[Nc], ncell); else None. A container
+    set is then drawn as its MERGED child cloud (each parent's particles fused into one
+    smooth blob), which is far more informative than its bare centroid dot."""
+    for c in _sets_in(d):
+        pn = d.get(f"{c}__parent_name")
+        if pn is not None and str(pn) == sname and f"{c}__parent" in d.files:
+            return d[f"{c}__pos"], d[f"{c}__parent"], int(d[f"{c}__parent"].max()) + 1
+    return None
+
+
+# _blur: Tiny separable Gaussian blur (no scipy) -> array.
+def _blur(a, sigma):
+    """Tiny separable Gaussian blur (no scipy dependency)."""
+    r = int(max(1, round(3 * sigma)))
+    k = np.exp(-0.5 * (np.arange(-r, r + 1) / sigma) ** 2); k /= k.sum()
+    a = np.apply_along_axis(lambda m: np.convolve(m, k, "same"), 0, a)
+    return np.apply_along_axis(lambda m: np.convolve(m, k, "same"), 1, a)
+
+
+# _rot_camera: Rotate centred world points [N, 3] into the camera frame (yaw about z, then pitch about screen-x) -> (screen_xy [N, 2], depth [N]).
+def _rot_camera(P, azim: float, elev: float):
+    """Rotate centred world points [N,3] into the camera frame: yaw by `azim`
+    about the vertical (z) axis, then pitch by `elev` about the screen-x axis.
+    Returns (screen_xy [N,2], depth [N]) with depth increasing AWAY from camera."""
+    x, y, z = P[:, 0], P[:, 1], P[:, 2]
+    ca, sa = np.cos(azim), np.sin(azim)
+    x1 = ca * x - sa * y
+    y1 = sa * x + ca * y
+    ce, se = np.cos(elev), np.sin(elev)
+    y2 = ce * y1 - se * z
+    depth = se * y1 + ce * z
+    return np.stack([x1, y2], 1), depth
+
+
+# _splat_accumulate: Splat weighted, coloured points -> (acc_colour [res_y, res_x, 3], acc_weight).
+def _splat_accumulate(xy, rgb, w, res_x: int, res_y: int, sigma: float):
+    """Splat weighted, coloured points to (acc_colour[res_y, res_x, 3], acc_weight); `xy` is in PIXEL coordinates. Vectorised scatter (np.add.at) + separable blur: one isotropic gaussian per point, fast enough for 8k points over a movie. The splat functions rasterise a cloud as composited soft gaussians (normalised colour sum w*rgb / sum w, opacity 1 - exp(-density/ref) from the blurred histogram); the 3D variant rotates into a camera frame and fogs / brightens by depth, and the movie ORBITS the camera, the strongest depth cue."""
+    gx = np.clip(xy[:, 0].astype(int), 0, res_x - 1)
+    gy = np.clip(xy[:, 1].astype(int), 0, res_y - 1)
+    acc_w = np.zeros((res_y, res_x), np.float32)
+    acc_c = np.zeros((res_y, res_x, 3), np.float32)
+    np.add.at(acc_w, (gy, gx), w)
+    for ch in range(3):
+        np.add.at(acc_c[..., ch], (gy, gx), w * rgb[:, ch])
+    acc_w = _blur(acc_w, sigma)
+    for ch in range(3):
+        acc_c[..., ch] = _blur(acc_c[..., ch], sigma)
+    return acc_c, acc_w
+
+
+# _composite_splat: Normalised colour over `bg`, opacity (1 - exp(-w/ref))^gamma -> RGB image (row 0 = top).
+def _composite_splat(acc_c, acc_w, bg, ref: float, gamma: float):
+    """Normalised colour over `bg`, opacity = (1 - exp(-w/ref))^gamma. `bg` is any
+    matplotlib colour. Row 0 of the returned image is top (high y)."""
+    from matplotlib.colors import to_rgb
+    col = acc_c / np.maximum(acc_w, 1e-8)[..., None]
+    a = (1.0 - np.exp(-acc_w / (ref + 1e-9)))[..., None] ** gamma
+    img = col * a + np.asarray(to_rgb(bg), np.float32)[None, None, :] * (1 - a)
+    return np.clip(img, 0, 1)[::-1]
+
+
+# gaussian_splat_2d: Render 2D points as composited gaussian blobs over the world [0, W] x [0, 1] -> [res, round(res*W), 3] RGB.
+def gaussian_splat_2d(points, rgb, W: float, res: int = 520, sigma: float = 2.6,
+                      bg="white", gamma: float = 0.8, density: float = 0.18):
+    """Render 2D points as composited gaussian blobs over the world [0,W]x[0,1].
+
+    points  : [N,2] world coordinates
+    rgb     : [N,3] per-point colour (or [3] broadcast)
+    returns : [res, round(res*W), 3] RGB image (origin top-left, high-y up).
+    `density` sets the opacity reference as a fraction of the peak blurred density."""
+    points = np.asarray(points, np.float32)
+    rgb = np.broadcast_to(np.asarray(rgb, np.float32), (len(points), 3))
+    res_y = res
+    res_x = max(1, int(round(res * max(W, 1e-9))))
+    xy = np.stack([points[:, 0] / max(W, 1e-9) * res_x, points[:, 1] * res_y], 1)
+    acc_c, acc_w = _splat_accumulate(xy, rgb, np.ones(len(points), np.float32), res_x, res_y, sigma)
+    return _composite_splat(acc_c, acc_w, bg, acc_w.max() * density + 1e-9, gamma)
+
+
+# gaussian_splat_3d: Render 3D points as a depth-shaded gaussian splat from an orbiting camera -> [res, res, 3] RGB.
+def gaussian_splat_3d(points, rgb, box, res: int = 520, sigma: float = 2.6,
+                      azim: float = 0.7, elev: float = 0.5, bg="black",
+                      gamma: float = 0.85, fog: float = 0.55, density: float = 0.16,
+                      intensity=None, zoom: float = 1.0, pan=(0.0, 0.0)):
+    """Render 3D points as a depth-shaded gaussian splat from an orbiting camera.
+
+    points : [N,3] world coordinates inside `box` ([bx,by,bz])
+    rgb    : [N,3] per-point colour (or [3] broadcast)
+    azim/elev : camera yaw/pitch in radians (vary `azim` per frame to orbit)
+    fog    : 0..1, how much far points are dimmed (depth cue); `density` as in 2D.
+    intensity : optional [N] per-point weight (e.g. a voxel's trail density) that
+                scales its splat brightness -- denser points read brighter.
+    returns: [res, res, 3] RGB image. Near points splat brighter, far points fade
+    into `bg` -- together with the orbit this gives a volumetric 3D read."""
+    points = np.asarray(points, np.float32)
+    if len(points) == 0:
+        from matplotlib.colors import to_rgb
+        return np.tile(np.asarray(to_rgb(bg), np.float32), (res, res, 1))
+    rgb = np.broadcast_to(np.asarray(rgb, np.float32), (len(points), 3)).copy()
+    box = np.asarray(box, np.float32)
+    P = points - 0.5 * box[None, :]                       # centre the box at the origin
+    screen, depth = _rot_camera(P, azim, elev)
+    dn = (depth - depth.min()) / (np.ptp(depth) + 1e-9)   # 0 = farthest, 1 = nearest
+    span = (float(np.linalg.norm(box)) * 0.5 + 1e-9) / max(zoom, 1e-6)   # half-diag / zoom (>1 = zoom in)
+    sx = (screen[:, 0] / (2 * span) + 0.5 + pan[0]) * res
+    sy = (screen[:, 1] / (2 * span) + 0.5 + pan[1]) * res
+    w = (0.4 + 0.6 * dn).astype(np.float32)               # nearer -> heavier (brighter) splat
+    if intensity is not None:
+        w = w * np.asarray(intensity, np.float32)         # denser points splat brighter
+    shade = (1.0 - fog) + fog * dn                        # nearer -> full colour, far -> fades to bg
+    acc_c, acc_w = _splat_accumulate(np.stack([sx, sy], 1), rgb * shade[:, None], w, res, res, sigma)
+    return _composite_splat(acc_c, acc_w, bg, acc_w.max() * density + 1e-9, gamma)
+
+
+# gaussian_splat_3d_tight: Sharp 3D splat of tight depth-sorted per-point sprites, alpha-over-composited -> [res, res, 3] RGB.
+def gaussian_splat_3d_tight(points, rgb, box, res: int = 600, azim: float = 0.7,
+                            elev: float = 0.5, bg="black", sprite_sigma: float = 2.0,
+                            fog: float = 0.55, peak: float = 0.92, intensity=None,
+                            zoom: float = 1.0, size_scale=None, pan=(0.0, 0.0)):
+    """Sharp 3D gaussian splat: stamp a TIGHT per-point gaussian sprite, depth-sorted
+    and alpha-over-composited (far drawn first, so near points occlude far) -- unlike
+    `gaussian_splat_3d`, which blurs the whole density grid and reads soft/mushy. Each
+    point keeps a defined glowing core of radius ~3*`sprite_sigma` px; depth fog dims
+    far points toward `bg`. `intensity` (optional [N]) scales per-point brightness.
+
+    points : [N,3] world coords in `box`; rgb : [N,3] (or [3]); returns [res,res,3]."""
+    from matplotlib.colors import to_rgb
+    bgc = np.asarray(to_rgb(bg), np.float32)
+    points = np.asarray(points, np.float32)
+    if len(points) == 0:
+        return np.tile(bgc, (res, res, 1))
+    rgb = np.broadcast_to(np.asarray(rgb, np.float32), (len(points), 3)).copy()
+    box = np.asarray(box, np.float32)
+    P = points - 0.5 * box[None, :]
+    screen, depth = _rot_camera(P, azim, elev)
+    dn = (depth - depth.min()) / (np.ptp(depth) + 1e-9)   # 0 = far, 1 = near
+    span = (float(np.linalg.norm(box)) * 0.5 + 1e-9) / max(zoom, 1e-6)   # half-diag / zoom (>1 = zoom in)
+    sx = (screen[:, 0] / (2 * span) + 0.5 + pan[0]) * res
+    sy = (screen[:, 1] / (2 * span) + 0.5 + pan[1]) * res
+    shade = (1.0 - fog) + fog * dn                        # near -> full colour, far -> fades to bg
+    if intensity is not None:
+        shade = shade * np.clip(np.asarray(intensity, np.float32), 0, None)
+    def _make_sprite(sig):
+        r = int(max(1, round(3 * sig)))
+        yy, xx = np.mgrid[-r:r + 1, -r:r + 1]
+        sp = np.exp(-(xx * xx + yy * yy) / (2.0 * sig ** 2)).astype(np.float32)
+        return sp / sp.max(), r
+    # per-point sprite size: a single sprite (fast path), or one per bucketed `size_scale`
+    # value (e.g. point size ~ |charge|), looked up per point in the depth-sorted loop.
+    if size_scale is None:
+        base = _make_sprite(sprite_sigma)
+        spr = lambda k: base
+        skey = np.zeros(len(points), int)
+    else:
+        ss = np.asarray(size_scale, np.float32)
+        keys = np.round(ss, 2)
+        cache = {float(u): _make_sprite(sprite_sigma * max(float(u), 0.05)) for u in np.unique(keys)}
+        spr = lambda k: cache[float(k)]
+        skey = keys
+    img = np.tile(bgc, (res, res, 1)).astype(np.float32)
+    sxi = np.round(sx).astype(int); syi = np.round(sy).astype(int)
+    for idx in np.argsort(-depth):                        # far -> near, src-over (near occludes)
+        sprite, rr = spr(skey[idx])
+        px, py = int(sxi[idx]), int(syi[idx])
+        x0, x1 = max(0, px - rr), min(res, px + rr + 1)
+        y0, y1 = max(0, py - rr), min(res, py + rr + 1)
+        if x0 >= x1 or y0 >= y1:
+            continue
+        a = (sprite[y0 - (py - rr):y1 - (py - rr), x0 - (px - rr):x1 - (px - rr)] * peak)[..., None]
+        c = (rgb[idx] * shade[idx])[None, None, :]
+        img[y0:y1, x0:x1] = a * c + (1 - a) * img[y0:y1, x0:x1]
+    return np.clip(img, 0, 1)[::-1]
+
+
+# _field_voxel_points: A 3D field frame [C, nx, ny, nz] -> (points [M, 3], rgb [M, 3], density [M]) for the voxels above `thresh`.
+def _field_voxel_points(frame, colors, R: float, thresh: float = 0.02):
+    """A 3D field frame `[C, nx, ny, nz]` -> (points[M,3], rgb[M,3], density[M]) for
+    the voxels whose summed density exceeds `thresh`. Voxel (i,j,k) maps to the world
+    centre ((i+.5)/R, (j+.5)/R, (k+.5)/R); colour is the density-weighted channel mix."""
+    total = frame.sum(0)                                  # [nx,ny,nz]
+    m = total > thresh
+    if not m.any():
+        return np.zeros((0, 3), np.float32), np.zeros((0, 3), np.float32), np.zeros((0,), np.float32)
+    idx = np.argwhere(m).astype(np.float32)               # [M,3]
+    dens = total[m].astype(np.float32)
+    cols = np.zeros((idx.shape[0], 3), np.float32)
+    for c in range(frame.shape[0]):
+        cols += np.asarray(colors[c], np.float32)[None, :] * frame[c][m][:, None]
+    cols /= dens[:, None]
+    pts = (idx + 0.5) / R
+    return pts, cols, dens
+
+
+# _point_rgb: Per-point RGB [N, 3] from a matplotlib colour array (None -> default blue).
+def _point_rgb(color, N: int):
+    """Per-point [N,3] RGB from a matplotlib colour array (or None -> default blue)."""
+    if color is None:
+        return np.tile(np.array([[0.12, 0.47, 0.71]], np.float32), (N, 1))
+    return np.asarray(color, np.float32)[:, :3]
+
+
+# _splat_style: The 3D-splat appearance from a spec's `plotting:` block -> dict.
+def _splat_style(style: dict) -> dict:
+    """Read the 3D-splat appearance from a spec's `plotting:` block. Intuitive knobs
+    (with back-compat aliases): `splat_size` (blob radius -> gaussian sigma),
+    `splat_sharpness` (opacity contrast -> gamma; higher = punchier/sharper),
+    `splat_transparency` (opacity reference; higher = more see-through),
+    `splat_fog` (how much far points fade into the background), plus `splat_res`."""
+    return dict(
+        res=int(style.get("splat_res", 520)),
+        sigma=float(style.get("splat_size", style.get("splat_sigma", 2.6))),
+        gamma=float(style.get("splat_sharpness", style.get("splat_gamma", 0.85))),
+        density=float(style.get("splat_transparency", style.get("splat_density", 0.16))),
+        fog=float(style.get("splat_fog", 0.55)),
+        elev=float(style.get("camera_elev", 0.5)),
+        bg=style.get("background", "black"),
+    )
+
+
+# _project_points: Project centred world points to screen pixels with the splat's camera -> (sx, sy, depth).
+def _project_points(points, box, azim, elev, res, zoom, pan=(0.0, 0.0)):
+    """Project centred world points to screen pixels (sx, sy) + camera depth, the same
+    camera the splat uses (box-centred, half-diagonal span / zoom). `pan` is a Ken-Burns
+    screen-fraction offset (dx, dy) that slides the whole frame (used for a slow drift)."""
+    P = np.asarray(points, np.float32) - 0.5 * np.asarray(box, np.float32)[None, :]
+    screen, depth = _rot_camera(P, azim, elev)
+    span = (float(np.linalg.norm(box)) * 0.5 + 1e-9) / max(zoom, 1e-6)
+    sx = (screen[:, 0] / (2 * span) + 0.5 + pan[0]) * res
+    sy = (screen[:, 1] / (2 * span) + 0.5 + pan[1]) * res
+    return sx, sy, depth
+
+
+# _box_corners_edges: The 8 corners of [0, bx] x [0, by] x [0, bz] and its 12 edges (corner-index pairs).
+def _box_corners_edges(box):
+    """The 8 corners of [0,bx]x[0,by]x[0,bz] and the 12 edges (corner-index pairs)."""
+    corners = np.array(list(itertools.product([0, 1], repeat=3)), np.float32) * np.asarray(box, np.float32)[None, :]
+    edges = [(i, j) for i in range(8) for j in range(i + 1, 8) if bin(i ^ j).count("1") == 1]
+    return corners, edges
+
+
+# _draw_edges: Draw the wireframe edges of an 8-corner box into `img` as faint blended lines -> None.
+def _draw_edges(img, corners, box, azim, elev, res, zoom, color, mix, which="all", pan=(0.0, 0.0)):
+    """Draw the wireframe edges of an 8-corner box into `img` (faint blended line).
+    `which`: 'all', or 'far'/'near' to draw only edges on the far/near side of the box
+    centre (so the near edges can be drawn AFTER the points -> proper occlusion)."""
+    cx, cy, cd = _project_points(corners, box, azim, elev, res, zoom, pan)   # cd = camera depth
+    _, edges = _box_corners_edges(np.ones(3))            # the 12 edge index pairs (adjacency only)
+    med = float(np.median(cd)); color = np.asarray(color, np.float32)
+    for a, b in edges:
+        if which != "all":                              # smaller depth = nearer the camera
+            near = 0.5 * (cd[a] + cd[b]) < med
+            if (which == "near") != near:
+                continue
+        n = int(max(abs(cx[a] - cx[b]), abs(cy[a] - cy[b])) * 1.5) + 2
+        gx = np.clip(np.linspace(cx[a], cx[b], n).astype(int), 0, res - 1)
+        gy = np.clip(np.linspace(cy[a], cy[b], n).astype(int), 0, res - 1)
+        img[gy, gx] = (1 - mix) * img[gy, gx] + mix * color
+
+
+# _aabb_corners: The 8 corners of the axis-aligned box [lo, hi] -> [8, 3].
+def _aabb_corners(lo, hi):
+    """The 8 corners of the axis-aligned box [lo, hi] (each [3])."""
+    lo, hi = np.asarray(lo, np.float32), np.asarray(hi, np.float32)
+    return np.array([[lo[0] if i & 4 else hi[0], lo[1] if i & 2 else hi[1], lo[2] if i & 1 else hi[2]]
+                     for i in range(8)], np.float32)
+
+
+# render_points_3d: Render 3D points as simple flat depth-ordered dots (the 3D analogue of the 2D MPM scatter) -> [res, res, 3] image.
+def render_points_3d(points, rgb, box, res=600, azim=0.7, elev=1.18, bg="black",
+                     size=2.0, fog=0.5, zoom=1.0, frame=False, obstacles=None, pan=(0.0, 0.0)):
+    """Render 3D points as SIMPLE flat dots (depth-ordered, painter's algorithm; near
+    overwrites far) -- the 3D analogue of the 2D MPM scatter, no soft gaussian blur.
+    `frame=True` draws the box as thin white wireframe edges; `obstacles` (already in the
+    render frame: box [x0,y0,z0,x1,y1,z1] / sphere [cx,cy,cz,r]) are drawn as grey solids.
+    `pan` is a Ken-Burns screen-fraction drift. Returns an [res,res,3] image."""
+    from matplotlib.colors import to_rgb
+    box = np.asarray(box, np.float32)
+    img = np.tile(np.asarray(to_rgb(bg), np.float32), (res, res, 1))
+    fcorners = _box_corners_edges(box)[0] if frame else None
+    if frame:                                            # FAR box edges go behind the points
+        _draw_edges(img, fcorners, box, azim, elev, res, zoom, (1, 1, 1), 0.55, which="far", pan=pan)
+    for o in (obstacles or []):                          # grey obstacle solids (drawn under the particles)
+        v = [float(x) for x in o]
+        if len(v) == 6:                                  # box: wireframe + faint fill of surface dots
+            _draw_edges(img, _aabb_corners(v[:3], v[3:6]), box, azim, elev, res, zoom, (0.55, 0.55, 0.6), 0.8, pan=pan)
+        elif len(v) == 4:                                # sphere: a shell of grey dots (Fibonacci sphere)
+            m = 700; k = np.arange(m); ph = np.arccos(1 - 2 * (k + 0.5) / m); th = np.pi * (1 + 5 ** 0.5) * k
+            shell = v[3] * np.stack([np.cos(th) * np.sin(ph), np.sin(th) * np.sin(ph), np.cos(ph)], 1) + np.array(v[:3])
+            sxo, syo, dep = _project_points(shell.astype(np.float32), box, azim, elev, res, zoom, pan)
+            for sxx, syy in zip(sxo.astype(int), syo.astype(int)):
+                if 0 <= sxx < res and 0 <= syy < res:
+                    img[syy, sxx] = (0.5, 0.5, 0.55)
+    if len(points):
+        rgb = np.broadcast_to(np.asarray(rgb, np.float32), (len(points), 3))
+        sx, sy, depth = _project_points(points, box, azim, elev, res, zoom, pan)
+        dn = (depth - depth.min()) / (np.ptp(depth) + 1e-9)        # 1 = nearest
+        cols = np.clip(rgb * ((1 - fog) + fog * dn)[:, None], 0, 1)
+        order = np.argsort(depth)[::-1]                  # far first; near painted last -> on top
+        sxo, syo, colo = sx[order].astype(int), sy[order].astype(int), cols[order]
+        r = int(round(size))
+        for oy in range(-r, r + 1):
+            for ox in range(-r, r + 1):
+                if ox * ox + oy * oy > r * r + 0.5:
+                    continue
+                gx = np.clip(sxo + ox, 0, res - 1); gy = np.clip(syo + oy, 0, res - 1)
+                img[gy, gx] = colo
+    if frame:                                            # NEAR box edges go IN FRONT of the points
+        _draw_edges(img, fcorners, box, azim, elev, res, zoom, (1, 1, 1), 0.55, which="near", pan=pan)
+    return np.clip(img, 0, 1)[::-1]
+
+
+# _splat3d_renderer: Build the per-frame 3D point renderer from the spec's `plotting:` block -> (render_fn, bg, azim0, turns, elev).
+def _splat3d_renderer(style, box, obstacles=None):
+    """Build the per-frame 3D point renderer `render(points, rgb, azim) -> image` from
+    the spec's `plotting:` block. `render_3d` selects the method: `tight` (default) =
+    sharp depth-sorted sprites; `splat` = soft grid-blur; `dots` = simple flat dots
+    (the 2D-MPM look) with an optional `box_frame` wireframe + grey `obstacles`. Returns
+    (render_fn, bg, azim0, turns, elev)."""
+    bg = style.get("background", "black")
+    azim0 = float(style.get("camera_azim", 0.7))
+    turns = float(style.get("camera_turns", 0.1))         # revolutions over the movie (slow constant drift)
+    rock = float(style.get("camera_rock", 0.0))           # gentle back-and-forth wobble (rad); off by default
+    zoom_amp = float(style.get("camera_zoom", 0.12))      # slow zoom-in over the clip (fractional, e.g. 0.12 = +12%)
+    elev = float(style.get("camera_elev", 0.5))           # camera pitch: 0 = top/face-on, ~pi/2 = side/edge-on
+    # optional pitch SWEEP: elev ramps camera_elev -> camera_elev_end over the movie (e.g. top-down 0.0 -> almost side-on 1.35); None = fixed pitch
+    _ee = style.get("camera_elev_end", None)
+    elev_end = None if _ee is None else float(_ee)
+    # Ken-Burns pan: total screen-fraction drift (dx, dy) applied linearly over the movie,
+    # on top of the `camera_zoom` slow push-in. `[0, 0]` (default) = no drift.
+    _pan = style.get("camera_pan", [0.0, 0.0]) or [0.0, 0.0]
+    pan_end = (float(_pan[0]), float(_pan[1]))
+    mode = style.get("render_3d", "tight")
+    # each render closure takes an optional per-frame pitch `el` and screen `pan` (the movie sweeps / pans the camera); stills and montages use the fixed `elev` and no pan
+    if mode == "dots":                                    # simple flat dots (2D-MPM look) + frame/obstacles
+        res = int(style.get("splat_res", 600))
+        dot = float(style.get("dot_size", style.get("splat_size", 2.0)))
+        fog = float(style.get("splat_fog", 0.4))
+        frame = bool(style.get("box_frame", False))
+        def render(pts, c, az, zoom=1.0, size=None, el=None, pan=(0.0, 0.0)):
+            return render_points_3d(pts, c, box, res=res, azim=az, elev=elev if el is None else el,
+                                     bg=bg, size=dot, fog=fog, zoom=zoom, frame=frame, obstacles=obstacles, pan=pan)
+    elif mode == "splat":                                 # soft grid-blur splat (the original)
+        kw = _splat_style(style)
+        def render(pts, c, az, zoom=1.0, size=None, el=None, pan=(0.0, 0.0)):
+            k = kw if el is None else {**kw, "elev": el}
+            return gaussian_splat_3d(pts, c, box, azim=az, zoom=zoom, pan=pan, **k)
+    else:                                                 # `tight` (default): sharp per-point sprites
+        res = int(style.get("splat_res", 600))
+        size = float(style.get("splat_size", style.get("splat_sigma", 2.6)))
+        sprite_sigma = max(1.4, 0.62 * size)              # blob radius ~ splat_size
+        fog = float(style.get("splat_fog", 0.55))
+        def render(pts, c, az, zoom=1.0, size=None, el=None, pan=(0.0, 0.0)):
+            return gaussian_splat_3d_tight(pts, c, box, res=res, azim=az, elev=elev if el is None else el,
+                                           bg=bg, sprite_sigma=sprite_sigma, fog=fog, zoom=zoom, size_scale=size, pan=pan)
+    return render, bg, azim0, turns, rock, zoom_amp, elev, elev_end, pan_end
+
+
+# _cam_zoom: Zoom factor at movie frame i of n, a slow linear ramp 1 -> 1 + `zoom_amp` -> float.
+def _cam_zoom(zoom_amp, i, n):
+    """Zoom factor at movie frame i of n: a slow linear ramp 1 -> 1+`zoom_amp` (a small
+    zoom-in over the clip). 1.0 (no ramp) for the still frames."""
+    return 1.0 + zoom_amp * (i / max(n - 1, 1))
+
+
+# _cam_azim: Camera azimuth at movie frame i of n (a `turns` turntable or a `rock` wobble) -> radians.
+def _cam_azim(azim0, turns, rock, i, n):
+    """Camera azimuth at movie frame i of n. `turns` (full revolutions over the clip)
+    is a constant-speed turntable that loops seamlessly at integer values -- the default
+    way to read the cloud as 3D. `rock` (radians) instead gives a back-and-forth wobble
+    `azim0 + rock·sin(2π t)`. With both 0 the view is fixed."""
+    t = i / max(n - 1, 1)
+    if turns:
+        return azim0 + 2 * np.pi * turns * t
+    return azim0 + rock * np.sin(2 * np.pi * t)
+
+
+# _cam_elev: Camera pitch at movie frame i of n -> radians.
+def _cam_elev(elev0, elev_end, i, n):
+    """Camera pitch at movie frame i of n: a linear ramp elev0 -> elev_end over the clip
+    (e.g. top-down 0.0 -> almost side-on 1.35), or the fixed `elev0` when elev_end is None."""
+    if elev_end is None:
+        return elev0
+    t = i / max(n - 1, 1)
+    return elev0 + (elev_end - elev0) * t
+
+
+# _cam_pan: Ken-Burns screen-fraction pan at movie frame i of n -> (dx, dy).
+def _cam_pan(pan_end, i, n):
+    """Ken-Burns screen-fraction pan at movie frame i of n: a linear ramp (0,0) -> pan_end
+    over the clip (a slow drift). (0,0) for the still frames / when no pan is configured."""
+    t = i / max(n - 1, 1)
+    return (pan_end[0] * t, pan_end[1] * t)
+
+
+# _splat3d_outputs: Evolution montage, final frame and optional movie for a 3D set -> None.
+def _splat3d_outputs(pos, occ, rgb, box, data_dir, sname, style, movie, T, size_scale=None, obstacles=None):
+    """Evolution montage + final frame + (optional) movie for a 3D set. The renderer
+    (`plotting.render_3d`: `tight` sharp sprites [default] or `splat` soft grid-blur)
+    and its appearance come from the `plotting:` block. `size_scale` ([N], optional)
+    scales each point's sprite (e.g. ~|charge|). Mirrors the 2D set outputs."""
+    render, bg, azim0, turns, rock, zoom_amp, elev0, elev_end, pan_end = _splat3d_renderer(style, box, obstacles=obstacles)
+
+    def img(i, az, zoom=1.0, el=None, pan=(0.0, 0.0)):
+        live = occ[i]
+        ss = size_scale[live] if size_scale is not None else None
+        return render(pos[i, live], rgb[live], az, zoom, ss, el, pan)
+
+    idx = [0, T // 5, 2 * T // 5, 3 * T // 5, T - 1]
+    fig, axes = plt.subplots(1, len(idx), figsize=(len(idx) * 3.2, 3.4))
+    fig.patch.set_facecolor(bg)
+    for ax, i in zip(np.atleast_1d(axes), idx):
+        ax.imshow(img(i, azim0)); ax.axis("off")
+    plt.tight_layout()
+    evo = os.path.join(data_dir, f"fig_{sname}_evolution.png")
+    plt.savefig(evo, dpi=100, facecolor=bg); plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=(6, 6)); fig.patch.set_facecolor(bg)
+    ax.imshow(img(T - 1, azim0)); ax.axis("off"); plt.tight_layout()
+    fin = os.path.join(data_dir, f"fig_{sname}_final.png")
+    plt.savefig(fin, dpi=110, facecolor=bg); plt.close(fig)
+    print(f"[plot] {sname} (3D splat): {os.path.basename(evo)}, {os.path.basename(fin)}", flush=True)
+
+    if movie:
+        # `movie_max_frames` was read by the 2D path and dropped here, so every 3D clip was 180 frames whatever the spec asked (a 911-frame run came out as 183 and a galaxy pair's closest approach passed in two of them)
+        _splat3d_movie(img, bg, azim0, turns, rock, zoom_amp, T,
+                       os.path.join(data_dir, f"movie_{sname}"), fps=int(style.get("fps", 15)),
+                       max_frames=int(style.get("movie_max_frames", 180)),
+                       elev0=elev0, elev_end=elev_end, pan_end=pan_end)
+
+
+# _splat3d_movie: 3D-splat movie from a frame renderer, with turntable / rock and Ken-Burns moves -> path.
+def _splat3d_movie(img, bg, azim0, turns, rock, zoom_amp, T, out_base,
+                   max_frames: int = 180, fps: int = 15, elev0: float = 0.5,
+                   elev_end=None, pan_end=(0.0, 0.0)) -> None:
+    """3D-splat movie from a frame renderer `img(i, azim, zoom, elev, pan)`. The camera does a
+    slow constant-speed turntable (`turns` revolutions over the clip) or a `rock` wobble, plus
+    a Ken-Burns move: a slow `zoom_amp` push-in + `pan_end` screen drift, and an optional
+    `elev0 -> elev_end` pitch sweep (e.g. top-down -> side-on). ~`max_frames`/`fps` s per clip."""
+    from matplotlib.animation import FuncAnimation
+    stride = max(1, T // max_frames)
+    frames = list(range(0, T, stride))
+
+    def render(i):
+        return img(i, _cam_azim(azim0, turns, rock, i, T), _cam_zoom(zoom_amp, i, T),
+                   _cam_elev(elev0, elev_end, i, T), _cam_pan(pan_end, i, T))
+
+    # one output pixel per splat pixel: the figure is sized from the frame the renderer produced (`splat_res`), not a fixed 5 in x 150 dpi (which wrote every 3D clip at 750 px and resampled a `splat_res: 820` render DOWN); h264 + yuv420p needs even dimensions
+    frame0 = render(0)
+    res = int(frame0.shape[0]); res -= res % 2
+    # dpi 1, size in "inches" = pixels: figsize x dpi must land on an exact even pixel count or libx264 refuses the stream (8.2 in x 100 dpi rounds to 819)
+    dpi = 1
+    fig = plt.figure(figsize=(res, res), dpi=dpi)
+    ax = fig.add_axes([0.0, 0.0, 1.0, 1.0]); ax.axis("off"); fig.patch.set_facecolor(bg)
+
+    im = ax.imshow(frame0)
+
+    def upd(i):
+        im.set_data(render(i)); return im,
+
+    anim = FuncAnimation(fig, upd, frames=frames, interval=50)
+    out = _save_anim(anim, out_base, bg, fps=fps, dpi=dpi); plt.close(fig)
+    print(f"[plot] 3D splat movie -> {os.path.basename(out)}", flush=True)
+
+
+# _field3d_outputs: Evolution montage, final frame and optional movie for a 3D scalar field, as a volume gaussian splat -> None.
+def _field3d_outputs(grid, colors, W, data_dir, fname, style, movie, T):
+    """Evolution montage + final frame + (optional) movie for a 3D scalar field,
+    rendered as a volume gaussian splat of its active voxels (density -> brightness).
+    `grid` is [T, C, nx, ny, nz]; appearance follows the `plotting:` splat knobs."""
+    kw = _splat_style(style)
+    bg = kw["bg"]
+    azim0 = float(style.get("camera_azim", 0.7))
+    turns = float(style.get("camera_turns", 0.1))         # slow constant drift (matches the set renderer)
+    rock = float(style.get("camera_rock", 0.0))
+    zoom_amp = float(style.get("camera_zoom", 0.12))
+    R = float(grid.shape[-1])                              # pixels per unit (axes 1,2 span [0,1])
+    box = np.array([W, 1.0, 1.0], np.float32)
+    thresh = float(style.get("field_thresh", 0.02))
+
+    def img(i, az, zoom=1.0):
+        pts, cols, dens = _field_voxel_points(grid[i], colors, R, thresh)
+        return gaussian_splat_3d(pts, cols, box, azim=az, intensity=dens, zoom=zoom, **kw)
+
+    idx = [0, T // 5, 2 * T // 5, 3 * T // 5, T - 1]
+    fig, axes = plt.subplots(1, len(idx), figsize=(len(idx) * 3.2, 3.4))
+    fig.patch.set_facecolor(bg)
+    for ax, i in zip(np.atleast_1d(axes), idx):
+        ax.imshow(img(i, azim0)); ax.axis("off")
+    plt.tight_layout()
+    evo = os.path.join(data_dir, f"fig_{fname}_evolution.png")
+    plt.savefig(evo, dpi=100, facecolor=bg); plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=(6, 6)); fig.patch.set_facecolor(bg)
+    ax.imshow(img(T - 1, azim0)); ax.axis("off"); plt.tight_layout()
+    fin = os.path.join(data_dir, f"fig_{fname}_final.png")
+    plt.savefig(fin, dpi=110, facecolor=bg); plt.close(fig)
+    print(f"[plot] {fname} (3D field splat): {os.path.basename(evo)}, {os.path.basename(fin)}", flush=True)
+
+    if movie:
+        from matplotlib.animation import FuncAnimation
+        stride = max(1, T // 180)
+        frames = list(range(0, T, stride))
+        fig, ax = plt.subplots(figsize=(5, 5)); ax.axis("off"); fig.patch.set_facecolor(bg)
+        fig.tight_layout(pad=0)
+        im = ax.imshow(img(0, azim0))
+
+        def upd(i):
+            im.set_data(img(i, _cam_azim(azim0, turns, rock, i, T), _cam_zoom(zoom_amp, i, T))); return im,
+
+        anim = FuncAnimation(fig, upd, frames=frames, interval=50)
+        out = _save_anim(anim, os.path.join(data_dir, f"movie_{fname}"), bg, fps=15); plt.close(fig)
+        print(f"[plot] 3D field splat movie -> {os.path.basename(out)}", flush=True)
+
+
+# _merged_rgb: Splat each parent's child particles to a blurred density mask painted in the parent's colour -> RGB image.
+def _merged_rgb(xy, par, ncell, W, cmap, res: int = 820, sigma: float = 1.7, bg="white", parent_rgb=None):
+    """Splat each parent's child particles to a blurred density mask and paint it the
+    parent's colour: a smooth, uniform per-cell blob composited over the spec background
+    `bg`. This is the special cell<-MPM 'apply colour then merge the particles' container
+    view. Renders at high internal resolution (res~820) with a tight blur (sigma~1.7) and
+    a steep alpha ramp so the blob stays a SOLID body with a crisp rim."""
+    from matplotlib.colors import to_rgb
+    Hh = res; Wd = max(1, int(round(res * W)))
+    rgb = np.tile(np.asarray(to_rgb(bg), float)[None, None, :], (Hh, Wd, 1))
+    gx = np.clip((xy[:, 0] / max(W, 1e-9) * Wd).astype(int), 0, Wd - 1)
+    gy = np.clip((xy[:, 1] * Hh).astype(int), 0, Hh - 1)
+    for c in range(ncell):
+        m = par == c
+        if not m.any():
+            continue
+        dens = np.zeros((Hh, Wd)); np.add.at(dens, (gy[m], gx[m]), 1.0)
+        dens = _blur(dens, sigma)
+        # steep ramp: full opacity at 8% of peak density, so the interior is solid and the tight blur leaves a thin crisp rim
+        a = np.clip(dens / (dens.max() * 0.08 + 1e-9), 0, 1)[..., None]
+        # per-parent MATERIAL colour (`plotting.colors`) if given, else a distinct colormap hue per parent body
+        col = np.asarray(parent_rgb[c][:3] if parent_rgb is not None else cmap(c % cmap.N)[:3], float)
+        rgb = rgb * (1 - a) + col[None, None, :] * a
+    return rgb[::-1]                                # image row 0 = top = high y
+
+
+# _merged_movie: Movie of a container set rendered as merged per-cell blobs -> path.
+def _merged_movie(cpos, par, ncell, W, cmap, T, out_base, max_frames: int = 120, bg: str = "white",
+                  obstacles=None, parent_rgb=None, fps: int = 25) -> None:
+    """Movie of a container set rendered as merged per-cell blobs."""
+    from matplotlib.animation import FuncAnimation
+    stride = max(1, T // max_frames); frames = list(range(0, T, stride))
+    # render large (8in) at high dpi so the high-res blob mask is not softened on upscale
+    fig, ax = plt.subplots(figsize=(8 * W, 8)); ax.axis("off"); fig.patch.set_facecolor(bg)
+    fig.tight_layout(pad=0)
+    im = ax.imshow(_merged_rgb(cpos[0], par, ncell, W, cmap, bg=bg, parent_rgb=parent_rgb),
+                   extent=[0, W, 0, 1], origin="upper", interpolation="bilinear")
+    _draw_obstacles(ax, obstacles)
+    ax.set_xlim(0, W); ax.set_ylim(0, 1); ax.set_aspect("equal")
+
+    def upd(i):
+        im.set_data(_merged_rgb(cpos[i], par, ncell, W, cmap, bg=bg, parent_rgb=parent_rgb)); return im,
+
+    anim = FuncAnimation(fig, upd, frames=frames, interval=50)
+    out = _save_anim(anim, out_base, bg, fps=fps, dpi=200); plt.close(fig)
+    print(f"[plot] merged-cell movie -> {os.path.basename(out)}", flush=True)
+
+
+# _movie: Render a movie of a set's trajectory (mp4 via ffmpeg, else gif) -> path.
+def _movie(pos, occ, color, s, W, T, out_base, max_frames: int = 120, bg: str = "white",
+           dot_fill=None,
+           obstacles=None, marker="dot", periodic=False, world=None, tri=(0.016, 0.01, 0.6),
+           fps: int = 25) -> None:
+    """Render a movie of a set's trajectory (mp4 via ffmpeg, else gif). `marker`: 'dot'
+    (scatter) or 'triangle' (thin-line colour triangles oriented along the heading)."""
+    from matplotlib.animation import FuncAnimation
+    stride = max(1, T // max_frames)
+    frames = list(range(0, T, stride))
+    # frame the axes to the true world box [0, wx] x [0, wy] with equal aspect, so a square world renders square, not as a W:1 strip clipped at y = 1
+    wx, wy = (float(world[0]), float(world[1])) if (world is not None and len(world) > 1) else (W, 1.0)
+    # render large (~8in on the long side) at high dpi so the dense cloud stays crisp through H.264.
+    fig, ax = plt.subplots(figsize=(8 * wx / wy, 8)); ax.set_xlim(0, wx); ax.set_ylim(0, wy)
+    ax.set_aspect("equal"); ax.axis("off"); ax.set_facecolor(bg); fig.patch.set_facecolor(bg)
+    fig.tight_layout(pad=0)
+    if marker == "triangle":
+        tri_L, tri_w, tri_lw = tri
+        ec0 = (color[occ[0]] if color is not None else "#1f77b4")
+        pc = PolyCollection(_triangle_verts(pos[0, occ[0]], _frame_dir(pos, 0, periodic, world)[occ[0]],
+                            tri_L, tri_w), facecolors="none", edgecolors=ec0, linewidths=tri_lw, closed=True)
+        ax.add_collection(pc); _draw_obstacles(ax, obstacles)
+
+        def upd(i):
+            live = occ[i]
+            pc.set_verts(_triangle_verts(pos[i, live], _frame_dir(pos, i, periodic, world)[live], tri_L, tri_w))
+            if color is not None:
+                pc.set_edgecolor(color[live])
+            return pc,
+    else:
+        # measured for this canvas when `dot_fill` is set, otherwise the old x1.6 factor (which compensated a count-based size table tuned on the smaller montage figure; a measured size already knows the canvas)
+        if dot_fill is not None and not np.ndim(s):
+            from plexus.live import dot_area_pt2
+            sm = dot_area_pt2(pos[0], wx, 8.0 * (wx / wy) * 200, 200, fill=float(dot_fill))
+        else:
+            sm = s * 1.6
+        # a per-frame colour array is [T, N, 3], a per-node one [N, 3] (the chemistry changes every frame, the type palette does not)
+        _pf = color is not None and np.ndim(color) == 3
+        sc = ax.scatter(pos[0, :, 0], pos[0, :, 1], s=sm, linewidths=0,
+                        c=((color[0] if _pf else color) if color is not None else "#1f77b4"))
+        _draw_obstacles(ax, obstacles)
+
+        def upd(i):
+            live = occ[i]
+            sc.set_offsets(pos[i, live])
+            if color is not None:
+                sc.set_color(color[i][live] if _pf else color[live])
+            return sc,
+
+    anim = FuncAnimation(fig, upd, frames=frames, interval=50)
+    out = _save_anim(anim, out_base, bg, fps=fps, dpi=200)
+    plt.close(fig)
+    print(f"[plot] movie -> {os.path.basename(out)}", flush=True)
+
+
+# _field_movie: Render a field's composited heatmap over time (mp4 via ffmpeg, else gif) -> path.
+def _field_movie(grid, colors, W, out_base, gamma, bg, max_frames: int = 150, stops=None) -> None:
+    """Render a field's composited heatmap over time (mp4 via ffmpeg, else gif)."""
+    from matplotlib.animation import FuncAnimation
+    T = grid.shape[0]
+    stride = max(1, T // max_frames)
+    frames = list(range(0, T, stride))
+    fig, ax = plt.subplots(figsize=(5 * W, 5)); fig.patch.set_facecolor(bg); ax.set_facecolor(bg)
+    ax.set_xlim(0, W); ax.set_ylim(0, 1); ax.set_aspect("equal"); ax.axis("off")
+    fig.tight_layout(pad=0)
+    im = ax.imshow(_composite(grid[0], colors, gamma, stops), origin="lower", extent=[0, W, 0, 1],
+                   interpolation="bilinear")
+
+    def upd(i):
+        im.set_data(_composite(grid[i], colors, gamma, stops))
+        return im,
+
+    anim = FuncAnimation(fig, upd, frames=frames, interval=50)
+    out = _save_anim(anim, out_base, bg)
+    plt.close(fig)
+    print(f"[plot] field movie -> {os.path.basename(out)}", flush=True)

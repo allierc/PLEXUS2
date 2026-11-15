@@ -1,0 +1,224 @@
+general:
+  name: exp09_land_it13
+  headline: 'exp09 it13: a crowded molecular landscape of 624 MPM bodies (19 % of a slab 192 x 108 x 90 nm)'
+  title: 'iteration 13, an ordered array of filaments (it08''s 90 nm deep slab and calm bath): NEW GEOMETRY -- 9 thick filaments (16 subunits of 10 nm, 160 nm long) and 6 thin ones (20 subunits of 8 nm) laid along x in alternate layers 18 nm apart, at three depths, with 170 pear-shaped heads, 40 dimers and 150 globules between them; NEW INTERACTION -- the filaments are held by bonds (it12) and the heads hold on to the thick filaments (contact tension -0.03; nothing sticks to the thin ones): do the heads gather on the thick filaments, and do 15 filaments that span the frame stay straight and parallel for 1,000 frames'
+  seed: 1
+  n_frames: 1000
+  dt: 1.0
+  record_cap: 251
+  save_every_min: 10.0
+  boundary: free
+  dim: 3
+  world:
+  - 20.4
+  - 12.0
+  - 10.2
+  units:
+    length_um: 0.01
+    time_s: 2.0e-07
+fields:
+  mpm_grid:
+    frame: mpm_grid
+    n_grid: 15
+    per_parent: cell
+    cell_box: 3.0
+sets:
+  cell:
+    n: 624
+    type_layout: ordered
+    types:
+      small:
+        count: 150
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      actin:
+        count: 120
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      myosin:
+        count: 144
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      dimer:
+        count: 40
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      pear:
+        count: 170
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: rate
+        record: false
+      bonded:
+        width: 1
+        record: false
+  pt:
+    entity: mpm_particle
+    parent: cell
+    per_parent: 343
+    density: 1.0
+    radius: 0.5
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: rate
+        record: false
+      pid:
+        width: 1
+      cellc:
+        width: 1
+        record: false
+operators:
+- op: thermal_bath
+  implementation: langevin
+  at: pt
+  friction: 0.0125
+  kT: 2.5e-05
+  substep_dt: 0.01
+  seed: 1
+- op: active_force
+  model: box_slab
+  at: pt
+  wall_stiffness: 400.0
+  lo:
+  - 0.6
+  - 0.6
+  - 0.6
+  hi:
+  - 19.8
+  - 11.4
+  - 9.6
+- op: pair_potential
+  model: cell_contact
+  at: pt
+  cells: cell
+  repulsion_strength: 600.0
+  contact_slack: 0.2
+  contact_surface_tension:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - -0.03
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - -0.03
+    - 0.0
+    - 0.0
+  contact_edge_width: 0.2
+- op: apical_junction
+  at: pt
+  cells: cell
+  k: 4.0
+  reach: 0.24
+  shell: 1000000000.0
+  skip_block: bonded
+- op: mpm_strain
+  at: pt
+  implementation: default
+- op: mpm_scatter
+  at: mpm_grid
+  from: pt
+  drag: 0.0
+  implementation: default
+- op: mpm_grid_update
+  at: mpm_grid
+  implementation: warp_pp_balanced
+- op: mpm_gather
+  at: pt
+  from: mpm_grid
+  implementation: default
+- op: aggregate_centroid
+  at: cell
+  child: pt
+schedule:
+- steps:
+  - thermal_bath
+  - active_force
+  - pair_potential
+  - apical_junction
+  - mpm_strain
+  - mpm_scatter
+  - mpm_grid_update
+  - mpm_gather
+  substep_dt: 0.01
+  capture: false
+- aggregate_centroid
+seed:
+- op: seed_positions
+  model: from_points_ragged
+  at: pt
+  cell_set: cell
+  points: experiments/exp09_molecular_landscape/data/seed_it13.npz
+  um_per_unit: 0.01
+  centre_um:
+  - 0.0
+  - 0.0
+  - 0.0
+  centre:
+  - 0.0
+  - 0.0
+  - 0.0
+  value_block: bonded
+plotting:
+  renderer: vtk_points
+  subject: pt
+  render_3d: contour
+  point_volume: 0.008000000000000002
+  cell_colours: type
+  colors:
+    small: '#8AC926'
+    actin: '#E63946'
+    myosin: '#9B5DE5'
+    dimer: '#00BBF9'
+    pear: '#F4A261'
+  surface_opacity: 1.0
+  background: '#8d99a6'
+  foreground: white
+  box_frame: false
+  camera:
+    elev: 90
+    azim: -90
+  zoom: 1.0
+  duration_s: 10
+  slow_motion: 1

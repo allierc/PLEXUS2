@@ -1,0 +1,4 @@
+time   2026-11-12 23:43:53
+run    tissue/mpm_s27_r1b_law_depth_1p5 (graph)
+drawn  the first stored rows of the run
+why    THE CLOSE VIEW, the graph of the points of cells 20 and 5 (a node per point, a yellow edge per tether): attraction_repulsion.depth = ('x', 1.5); at row 28 (frame 28): median gap of the facing front points 55 nm, mixing 0.442, J 2.315 (the base 2.000)

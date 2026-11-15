@@ -1,0 +1,12 @@
+{
+  "model": "gemma-4-12B-it",
+  "root": "/workspace/Plexus/experiments/exp01_minisite/mp4",
+  "records": [
+    {
+      "video": "/workspace/Plexus/experiments/exp01_minisite/mp4/0010.mp4",
+      "name": "0010",
+      "description": "A green humanoid figure stands on a grey pedestal holding two white spheres. As the simulation progresses, the figure's body undergoes a rapid structural failure and collapses toward the left. The two white spheres are detached from the figure's hands and remain suspended in the air. By the final frames, the figure is largely flattened against the side of the pedestal while the spheres stay stationary.",
+      "objects": "The primary object is a green humanoid figure with a textured surface and a muscular build. Two white spheres with a porous, sponge-like texture are held by the figure's arms. A large, light grey rectangular pedestal serves as the base for the figure. A scale bar in the bottom right corner indicates a length of 50 mm."
+    }
+  ]
+}

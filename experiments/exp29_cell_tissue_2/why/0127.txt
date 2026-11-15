@@ -1,0 +1,5 @@
+time   2026-11-02 15:57:30
+run    tissue/mpm_patch_020 (mpm; ink look, every cell its own colour, by id, tools/exp29_studio.py)
+drawn  61 of 61 stored rows; activator scale 0..1 (99.5th percentile of the whole run)
+insets cells 2 -> 2; cell volume (µm³) mean 1000 -> 1000, y to 1050
+why    TWO-CELL PATCH AT 0.2 um POINT SPACING (Cedric, 2026-11-02): two cubic cells of 10 um, 125,000 material points each, touching along a face, joined by the cadherin junction (bond_binding[population] weighted by the molecular rig's bound fraction against the cleft, bond_springs[population]); every adhesion length of step 23 scaled by 0.02/0.2

@@ -1,0 +1,5 @@
+time   2026-11-02 09:23:42
+run    tissue/mpm_sphere_twin_1000_ord (mpm; ink look, every cell its own colour, by id, tools/exp29_studio.py)
+drawn  118 of 118 stored rows; activator scale 0..1 (99.5th percentile of the whole run)
+insets cells 21 -> 36; activator distribution; cell volume (µm³) mean 1000 -> 1115, y to 1844
+why    TWIN OF MOVIE 34 WITH 1000 MATERIAL POINTS PER CELL (Cedric, 2026-11-02), RERUN with pair_potential after bond_springs in the substep block (contacts, junction, junction, overlap): whole sphere, opaque, surface threshold 0.3; one blue cell inside a closed sphere of 20 red cells

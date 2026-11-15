@@ -1,0 +1,5 @@
+time   2026-11-12 15:53:07
+run    tissue/mpm_sphere_twin_4000_three_stage (mpm; ink look, every cell its own colour, by id, tools/exp29_studio.py)
+drawn  100 of 100 stored rows; activator scale 0..1 (99.5th percentile of the whole run)
+insets cells 21 -> 32; cell volume (µm³) mean 1000 -> 1024, y to 1685
+why    THE 4000-POINT TWIN WITH THE THREE ADHESION STAGES, WHOLE SPHERE (Cedric, 2026-11-12): spec config/tissue/mpm_sphere_twin_4000_three_stage.yaml in the endpoint syntax (at, from, via; no to): contact surface tension -0.1177, the force curve of the dense two-cell rig with its gaps x2 and accelerations x0.5, the junction at bond stiffness 0.0304, cell surface tension 0.082, daughter gap 0.004; the sphere of 20 red cells round one blue cell, no cross section, both cell types solid, black ground, the insets of the junctions' bound density and of the live cells per type, the cell count and the time at the top left, frames 1 to 300 only

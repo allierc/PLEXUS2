@@ -1,0 +1,4 @@
+time   2026-11-13 08:00:14
+run    tissue/mpm_s27_r3b_bond_springs_bond_stiffness_0p5 (graph)
+drawn  the first stored rows of the run
+why    THE CLOSE VIEW, the graph of the points of cells 20 and 5 (a node per point, a yellow edge per tether): bond_springs.bond_stiffness = ('x', 0.5); at row 28 (frame 28): median gap of the facing front points 123 nm, mixing 0.356, J 3.748 (the base 2.000)

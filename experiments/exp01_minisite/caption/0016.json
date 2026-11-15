@@ -1,0 +1,12 @@
+{
+  "model": "gemma-4-12B-it",
+  "root": "/workspace/Plexus/experiments/exp01_minisite/mp4",
+  "records": [
+    {
+      "video": "/workspace/Plexus/experiments/exp01_minisite/mp4/0012.mp4",
+      "name": "0012",
+      "description": "A green spherical object undergoes a morphological transformation into a complex, irregular shape. The initial sphere gradually flattens and develops protrusions on its surface. Over time, the structure becomes increasingly elongated and develops distinct \"limbs\" or lobes. By the final frame, the object has transformed into a humanoid-like figure with a defined head, torso, and limbs.",
+      "objects": "The primary object is a single, continuous green mass that changes its geometry throughout the sequence. It starts as a smooth, roughly spherical volume with a diameter of approximately 10 micrometers. As it evolves, the surface becomes highly textured and develops multiple connected lobes. The final form is a complex, multi-lobed structure that maintains a consistent green color and overall scale."
+    }
+  ]
+}

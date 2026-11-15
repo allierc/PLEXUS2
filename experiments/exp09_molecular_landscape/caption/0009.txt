@@ -1,0 +1,4 @@
+- video name: 0009
+- description: The simulation shows a dense collection of multi-colored particles interacting within a confined space. A horizontal orange barrier separates a region of smaller blue and green particles from a larger, more complex mixture below. Over time, the particles in the lower region shift and rotate, maintaining a high-density state. The overall system remains stable, with no significant large-scale migration across the orange boundary.
+- objects: The scene contains numerous small, spherical blue and green particles clustered in the upper and lower regions. A horizontal chain of orange, bead-like structures forms a porous membrane across the center. The lower region is filled with larger, elongated pink, purple, and yellow ellipsoids mixed with small green spheres. These larger objects vary in size and orientation, creating a crowded, heterogeneous environment.
+

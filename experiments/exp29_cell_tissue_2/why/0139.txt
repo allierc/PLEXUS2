@@ -1,0 +1,4 @@
+time   2026-11-12 22:57:37
+run    tissue/mpm_sphere_twin_4000_step27 (section)
+drawn  the first stored rows of the run
+why    THE CROSS SECTION, red cells clipped at the plane through the centre, blue cells whole: the run as it stands (whole run)

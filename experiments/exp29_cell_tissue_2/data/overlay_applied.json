@@ -1,0 +1,1815 @@
+{
+ "0057": {
+  "step": "0057",
+  "lines": [
+   "baseline, no sweep: 9 cells grow and divide twice",
+   "pair_potential(cell_contact)  contact_slack 0.05",
+   "contact_surface_tension 0, contact_edge_width 0.2"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 581,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0057.mp4",
+  "sha256_mp4": "ef35a12a073dcfb3d983d94732426123e3be1b9d7990e97b25bfc7bf435b3565",
+  "sha256_png": "feae6777b1d6ee1825c2b17d3d8694bfd33edd476231586ccbe70c523161cd21",
+  "movie": {
+   "frames": 126,
+   "frames_out": 126,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0058": {
+  "step": "0058",
+  "lines": [
+   "pair_potential(cell_contact)  contact_slack",
+   "0 to 0.35, one value per family (labels)",
+   "fixed: contact_surface_tension 0, contact_edge_width 0.2"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 568,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0058.mp4",
+  "sha256_mp4": "d5ebb067272d69c96f25eeca322424ca16474137a9bc6f8e30c810a1e6699884",
+  "sha256_png": "cb714ecba12e02c2bb0ee64f28cb2bc0961d4d613a84ff83aec8d85e71eb12b5",
+  "movie": {
+   "frames": 126,
+   "frames_out": 126,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0059": {
+  "step": "0059",
+  "lines": [
+   "pair_potential(cell_contact)  contact_slack",
+   "0.25 to 50, one value per family (labels)",
+   "fixed: contact_surface_tension 0, contact_edge_width 0.2"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 568,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0059.mp4",
+  "sha256_mp4": "561ad8d4d722538f55db24283108d6ee8097ec4c050c4a20f1e448a9139fc616",
+  "sha256_png": "0456f6c10cd289d10eee3c637c1ea340600e6bf161affc6109a12313f72d99bd",
+  "movie": {
+   "frames": 126,
+   "frames_out": 126,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0060": {
+  "step": "0060",
+  "lines": [
+   "pair_potential(cell_contact)  contact_slack",
+   "0.25 to 0.5, one value per family (labels)",
+   "fixed: contact_surface_tension 0, contact_edge_width 0.2"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 568,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0060.mp4",
+  "sha256_mp4": "4bdcbeebfe45830ff211a6cf43f8dd31d09ca5357a75ddf383235b36b8a9cd7c",
+  "sha256_png": "4d5c93d36d6b2b853c2a50990992fbcb92d370a1ef7899edf076e8456b3bb78b",
+  "movie": {
+   "frames": 126,
+   "frames_out": 126,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0061": {
+  "step": "0061",
+  "lines": [
+   "pair_potential(cell_contact)  contact_edge_width",
+   "-0.8 to 0.8 length units (1 unit = 10 um), per family (labels)",
+   "fixed: contact_slack 2, contact_surface_tension -0.1"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 588,
+  "h": 75,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0061.mp4",
+  "sha256_mp4": "ec20513d057fa4fd34cb4f940c45c76b98333d0702d444b7847d26143a55aa36",
+  "sha256_png": "3e7690b9d12c3f14872914a439b2b7b3d343f37e245588d715985734ca562f03",
+  "movie": {
+   "frames": 126,
+   "frames_out": 126,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0062": {
+  "step": "0062",
+  "lines": [
+   "pair_potential(cell_contact)  contact_edge_width",
+   "0.05 to 1 length units (1 unit = 10 um), per family (labels)",
+   "fixed: contact_slack 2, contact_surface_tension -0.1"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 588,
+  "h": 75,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0062.mp4",
+  "sha256_mp4": "b204c4ed233c3a1231d143ce07f5ca3876cea58808570f365e5b4316d104bbd7",
+  "sha256_png": "03ee8c42b59041f2bf0c39fb2a192e83b16ff723e81b627d36cf7fa15865fb5a",
+  "movie": {
+   "frames": 126,
+   "frames_out": 126,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0063": {
+  "step": "0063",
+  "lines": [
+   "pair_potential(cell_contact)  contact_surface_tension",
+   "-1 to 1, one value per family (labels)",
+   "fixed: contact_slack 2, contact_edge_width 0.2"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 631,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0063.mp4",
+  "sha256_mp4": "f075e9c028e405c20852512ebd32cd2f514c4a08f6c339f533be6abef9afb0ab",
+  "sha256_png": "fd7ad24bc5ce6d297c9ca062cafa386bc0bc33da58e7e3d57529bac4e76489a2",
+  "movie": {
+   "frames": 126,
+   "frames_out": 126,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0064": {
+  "step": "0064",
+  "lines": [
+   "pair_potential(cell_contact)  contact_slack",
+   "1 to 50, one value per family (labels)",
+   "fixed: contact_surface_tension 0, contact_edge_width 0.2"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 568,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0064.mp4",
+  "sha256_mp4": "969d5f679c26122e41c66507effe193a7743b86fbbe84fec8e91b14d000d85cd",
+  "sha256_png": "27a0ee9c9cea38671e1ec25536039bac503b43abf0146f5e9e36c44c76f513fa",
+  "movie": {
+   "frames": 126,
+   "frames_out": 126,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0065": {
+  "step": "0065",
+  "lines": [
+   "active_force(footprint_spreading)  spreading_strength",
+   "0 to 100 (spreading acceleration), per family (labels)",
+   "fixed: growth_law_exponent 1, contact_slack 2, contact_edge_width 0.2,",
+   "contact_surface_tension -0.1"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 717,
+  "h": 100,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0065.mp4",
+  "sha256_mp4": "996729cb375d9baf11043f48650dbba279b9ba0d98de05021e225942855dfb89",
+  "sha256_png": "51b28cdc7297dc3ca6f2bee77fe61ddc8d5904d0ba9713aef7cbb24917134f9f",
+  "movie": {
+   "frames": 126,
+   "frames_out": 126,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0066": {
+  "step": "0066",
+  "lines": [
+   "active_force(footprint_spreading)  spreading_strength",
+   "100 to 1000 (spreading acceleration), per family (labels)",
+   "fixed: growth_law_exponent 1, contact_slack 2, contact_edge_width 0.2,",
+   "contact_surface_tension -0.1"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 717,
+  "h": 100,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0066.mp4",
+  "sha256_mp4": "931b7bdaa3d0fec46f84082f73090d20c1100c752ddefbb72a6cc079837cd793",
+  "sha256_png": "89f58d1f852028f8a42213a27c9ede760b326235d7b19934bfd58ca03a801a0c",
+  "movie": {
+   "frames": 126,
+   "frames_out": 126,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0067": {
+  "step": "0067",
+  "lines": [
+   "active_force(footprint_spreading)  growth_law_exponent",
+   "1.0 to 1.8, one value per family (labels)",
+   "fixed: spreading_strength 100, contact_slack 2, contact_edge_width 0.2,",
+   "contact_surface_tension -0.1"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 708,
+  "h": 100,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0067.mp4",
+  "sha256_mp4": "d1072a909c48107ae7a81c697d4664c4001ff30b596227f786b47166099ebae9",
+  "sha256_png": "7c43698d9337f0654ebd3c506631c6befec9e7572667ac0833ba5afc975fe0fe",
+  "movie": {
+   "frames": 126,
+   "frames_out": 126,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0068": {
+  "step": "0068",
+  "lines": [
+   "active_force(footprint_spreading)  growth_law_exponent",
+   "1.0 to 1.8, one value per cell (labels)",
+   "fixed: spreading_strength 100, no division, contact_slack 2,",
+   "contact_surface_tension -0.1"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 669,
+  "h": 100,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0068.mp4",
+  "sha256_mp4": "9c441e2fd9ddc583850b7c41668e6b1467c9dd46499c43002acee4ecea000500",
+  "sha256_png": "aaa7b1ec6d38ff67c2f4332584d7386e5442d9b6b2ec0e7aef2b72d69efaaa7a",
+  "movie": {
+   "frames": 76,
+   "frames_out": 76,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0069": {
+  "step": "0069",
+  "lines": [
+   "deform_control(cell_flattening)  flattening_rate",
+   "0 to 0.004 per frame, one value per cell (labels)",
+   "fixed: no division, contact_slack 2, contact_edge_width 0.2,",
+   "contact_surface_tension -0.1"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 584,
+  "h": 100,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0069.mp4",
+  "sha256_mp4": "ca664aafaff47a27b8a11fcaf799f0a3ac6c1da86ab4895fd5d6caea56ed824d",
+  "sha256_png": "b6d31589e9369f29545f4431000a739c61f7899863d5b02fa2a86b2edcb74b4d",
+  "movie": {
+   "frames": 76,
+   "frames_out": 76,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0070": {
+  "step": "0070",
+  "lines": [
+   "attraction_repulsion(stretched_cohesion)  z_stretch",
+   "1 to 3 (z stretch of the distance), per cell (labels)",
+   "fixed: gain 2, no division, contact_slack 2, contact_surface_tension -0.1"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 689,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0070.mp4",
+  "sha256_mp4": "f2485e0d90438e71eca2985e66ebe1faa179258aa72b9b759e569040bd355b65",
+  "sha256_png": "b1b02e3cf658f744ab261837c56c403ab8add377779c4b459e39277c04a89a63",
+  "movie": {
+   "frames": 76,
+   "frames_out": 76,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0071": {
+  "step": "0071",
+  "lines": [
+   "deform_control(cell_flattening)  flattening_rate",
+   "0 to 0.016 per frame, one value per cell (labels)",
+   "fixed: no division, contact_slack 2, contact_edge_width 0.2,",
+   "contact_surface_tension -0.1"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 584,
+  "h": 100,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0071.mp4",
+  "sha256_mp4": "815cbfb32267330e6e846712ad1404914b3a14b47aeebdd070760bac8a113e8b",
+  "sha256_png": "9fa50dd8fd3f1de4c78063e2ddc93db263cad611bb47a554371ceb5a28354c5f",
+  "movie": {
+   "frames": 76,
+   "frames_out": 76,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0072": {
+  "step": "0072",
+  "lines": [
+   "attraction_repulsion(stretched_cohesion)  z_stretch",
+   "1 to 3 (z stretch of the distance), per cell (labels)",
+   "fixed: gain 300, no division, contact_slack 2,",
+   "contact_surface_tension -0.1"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 594,
+  "h": 100,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0072.mp4",
+  "sha256_mp4": "5e98949b5cdea33f0d24b6598c9ce17ab588d41e8d822e68fddb8f6f4ea50377",
+  "sha256_png": "c553c92f75fa97dd914965260b6eb52c7c2852854c1f28dbfd07f833ee2a7592",
+  "movie": {
+   "frames": 76,
+   "frames_out": 76,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0073": {
+  "step": "0073",
+  "lines": [
+   "attraction_repulsion(stretched_cohesion)  z_stretch",
+   "1 to 3 (z stretch of the distance), per cell (labels)",
+   "fixed: gain 3000, no division, contact_slack 2,",
+   "contact_surface_tension -0.1"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 594,
+  "h": 100,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0073.mp4",
+  "sha256_mp4": "ad6aba6979e33d12540aff26d51a0f36cf8b94e363ec53073ad02d569c48ecb3",
+  "sha256_png": "29eb41948c73ad0e694130f0f57f5affc25bc0136d3c9ba6eadacc132e0971d2",
+  "movie": {
+   "frames": 76,
+   "frames_out": 76,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0074": {
+  "step": "0074",
+  "lines": [
+   "deform_control(cell_flattening)  flattening_rate",
+   "0 to 0.008 per frame, one value per family (labels)",
+   "fixed: 2 divisions, contact_slack 2, contact_edge_width 0.2,",
+   "contact_surface_tension -0.1"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 578,
+  "h": 100,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0074.mp4",
+  "sha256_mp4": "2d2b87e5a903fb008dc6b72f684b630c046cbad1c08ad8e09a0cf0a64ff142ed",
+  "sha256_png": "2def6863154a966dc896934c4aec350d6454335aae714b390e6530803c7c5ca5",
+  "movie": {
+   "frames": 126,
+   "frames_out": 126,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0075": {
+  "step": "0075",
+  "lines": [
+   "deform_control(cell_flattening)  flattening_rate",
+   "0 to 0.004 per frame (labels), seeds 100 um apart",
+   "fixed: 5 divisions, contact_slack 2, contact_surface_tension -0.1"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 611,
+  "h": 75,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0075.mp4",
+  "sha256_mp4": "9ebdae2d49644eaeca023375e5349b3e7b404dd0cacfb99ea6e3db1d4f02c73b",
+  "sha256_png": "01c14ff636a721ff1e7d3cf34677e12b9f7b62b85d7b5540f6ec78468065dd1a",
+  "movie": {
+   "frames": 111,
+   "frames_out": 111,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0076": {
+  "step": "0076",
+  "lines": [
+   "deform_control(cell_flattening)  flattening_rate",
+   "0 to 0.004 per frame (labels), seeds 24 um apart",
+   "fixed: 5 divisions, contact_slack 2"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 549,
+  "h": 75,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0076.mp4",
+  "sha256_mp4": "97c7a449f33b5f4780466e6cbf2a38b1c093e59b6832b70bbda1c31316f1fb54",
+  "sha256_png": "e1beb4608915fa04d421c9186c210fc56d0d7d3c9eca2ec409905e81c7c481a0",
+  "movie": {
+   "frames": 111,
+   "frames_out": 111,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0077": {
+  "step": "0077",
+  "lines": [
+   "deform_control(cell_flattening)  flattening_rate 0.0035 per frame",
+   "no sweep: one cell, ten divisions",
+   "fixed: contact_slack 2, contact_edge_width 0.2,",
+   "contact_surface_tension -0.1"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 751,
+  "h": 100,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "data/pre_unify_backup_2026-10-31/redrawn_no_text/mp4/0077.mp4",
+  "sha256_mp4": "657750cb361ac8e03b648ea7a97f3b25ed5f0f95bc7e4fce998ed49365a2a73a",
+  "sha256_png": "f54377f35b950ca185134c5fa2e97a3673dea6ebfa26b3a076be1afc6725d702",
+  "movie": {
+   "frames": 40,
+   "frames_out": 40,
+   "fps": 4.0,
+   "fps_out": 4.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0080": {
+  "step": "0080",
+  "lines": [
+   "mpm_grid_update(warp_pp_balanced)  cell_surface_tension",
+   "0 to 4.8, one value per family (labels)",
+   "fixed: cell_flattening flattening_rate 0.0035, 5 divisions,",
+   "contact_slack 2"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 716,
+  "h": 100,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0080.mp4",
+  "sha256_mp4": "443629b4d492eb65e2bb1a7000206aba0bff01cf8f2ded16978b1f948a66f253",
+  "sha256_png": "e41014a6ea7913ac080d66c00b036409d47a4a2b31d6d0763bcecbdd2eb81caa",
+  "movie": {
+   "frames": 111,
+   "frames_out": 111,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0081": {
+  "step": "0081",
+  "lines": [
+   "junction_kinetics  adhesion maximum rho* (LL, bound density)",
+   "0.05 to 3, one value per array (labels)",
+   "blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 860,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0081.mp4",
+  "sha256_mp4": "052770947afc098e74eed9d0872bd0b846824ebf3e9dc5eae5f0ae3a95fbb295",
+  "sha256_png": "5955571566174c59b4f6bbf3e2e39edb6a4aee1e9ca9c380571b44247ae73668",
+  "movie": {
+   "frames": 121,
+   "frames_out": 121,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0082": {
+  "step": "0082",
+  "lines": [
+   "cell_adhesion  tether stiffness kappa",
+   "0.3 to 30, one value per array (labels)",
+   "blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 858,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0082.mp4",
+  "sha256_mp4": "13006478b9d2c31b6382db5f2f28e37e3f4eb9cf83cf25a97a5fdae970bbc56b",
+  "sha256_png": "7cbd7786863d2bbd287f1c3c878a4e26ebe2ccdbe35e9724705c7f7c151ed797",
+  "movie": {
+   "frames": 121,
+   "frames_out": 121,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0083": {
+  "step": "0083",
+  "lines": [
+   "junction_kinetics  unbinding rate k_off",
+   "0.0003 to 3, one value per array (labels)",
+   "blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 860,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0083.mp4",
+  "sha256_mp4": "97f2747e43e0a6648680fc19378e71500d259ba84ea32aeb314f0171e04018ce",
+  "sha256_png": "3354bf31586a091c253eb98825ac1cc32377cbf6c488596e572125a96b06dd7d",
+  "movie": {
+   "frames": 121,
+   "frames_out": 121,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0084": {
+  "step": "0084",
+  "lines": [
+   "bond_binding  bond strength (bond_strength, the Bell force scale)",
+   "0.05 to 30, one value per array (labels)",
+   "blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 858,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0084.mp4",
+  "sha256_mp4": "4f251c417e0e984c6de7e11b9e865a3775dbe37400632e50a6d5b3328396bd50",
+  "sha256_png": "c0aa01598a36d08e2e473b03476770924cfcf9f45533d0c38baeb16c929f191e",
+  "movie": {
+   "frames": 121,
+   "frames_out": 121,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0086": {
+  "step": "0086",
+  "lines": [
+   "bond_binding  adhesion maximum rho* (LL, bound density)",
+   "0.05 to 3, one value per array (labels)",
+   "blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 858,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0086.mp4",
+  "sha256_mp4": "d9e06610aefb867cb3e4ea38de0ffb19fbbdfa95b521dde77b5c4f0b7a0ffce9",
+  "sha256_png": "32078fbbd18396a30c40e1b1b472f41186c073d6c334c659d0d7d097d55ffa34",
+  "movie": {
+   "frames": 121,
+   "frames_out": 121,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0087": {
+  "step": "0087",
+  "lines": [
+   "bond_springs  bond stiffness (bond_stiffness, the tether spring constant)",
+   "0.3 to 30, one value per array (labels)",
+   "blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 858,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0087.mp4",
+  "sha256_mp4": "d95899abfefbbee9e8089ad4719a6b0aca08306c05ce3c424d4e1a3c7e44907b",
+  "sha256_png": "cd3a81fd9b15f02899cea38ecf359b070c32adbe6a642c87c4c929065d6002d8",
+  "movie": {
+   "frames": 121,
+   "frames_out": 121,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0088": {
+  "step": "0088",
+  "lines": [
+   "bond_binding  unbinding rate (unbinding_rate)",
+   "0.0003 to 3, one value per array (labels)",
+   "blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 858,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0088.mp4",
+  "sha256_mp4": "6dd3194e53c55bc64af00640ef51ab5d49561705884c90d77952f50529d55399",
+  "sha256_png": "923e281fc466006d7d3bb8e97ec39937dd5478e7b71c13825d0cefbfa1af59cd",
+  "movie": {
+   "frames": 121,
+   "frames_out": 121,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0089": {
+  "step": "0089",
+  "lines": [
+   "bond_binding  binding rate (binding_rate)",
+   "0.03 to 30, one value per array (labels)",
+   "blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 858,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0089.mp4",
+  "sha256_mp4": "572d743bf9a3b344e0e0f3d1076f5269c06770d5664a08d665154f2f83c2a33b",
+  "sha256_png": "bf4f905481612fd830ec5f0e71448bc41caa28fc2c8ca7ffe425d691a3310c9e",
+  "movie": {
+   "frames": 121,
+   "frames_out": 121,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0085": {
+  "step": "0085",
+  "lines": [
+   "bond_springs  bond range (bond_range, the longest bonded distance)",
+   "0.2 to 0.7, one value per array (labels)",
+   "blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 858,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0085.mp4",
+  "sha256_mp4": "0bdcca506215e5651f4bff41568012554c3647b907a8c20d3c952a97d6bd59c6",
+  "sha256_png": "4cfed70f2aa7869ef08bac5d3701c90aa252b076d7e5804806cce8108f87c39c",
+  "movie": {
+   "frames": 121,
+   "frames_out": 121,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0091": {
+  "step": "0091",
+  "lines": [
+   "the outer cells  outer cell stiffness (Young's modulus)",
+   "5 to 400, one value per array (labels)",
+   "blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 858,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0091.mp4",
+  "sha256_mp4": "fa598a04f53653b9edd3db3e275496320ecb70fc4fdce81e7c90462c65c3abbe",
+  "sha256_png": "966edff6916bc60baddf6e32d063086592cb3b245b29fb49dd47cab1a3b402b5",
+  "movie": {
+   "frames": 121,
+   "frames_out": 121,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0092": {
+  "step": "0092",
+  "lines": [
+   "bond_springs  bond damping (bond_damping)",
+   "0 to 30, one value per array (labels)",
+   "blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 858,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0092.mp4",
+  "sha256_mp4": "04f7b88a6e68ac4965cf2c3aa11ec0b58d4b54289f88a583448ac824986e722d",
+  "sha256_png": "aa889ab9741e5f9a07babdbf5a72f86daf50ebd409a1d9f75a542f1230c795a0",
+  "movie": {
+   "frames": 121,
+   "frames_out": 121,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0093": {
+  "step": "0093",
+  "lines": [
+   "the outer cells  outer cell stiffness (Young's modulus)",
+   "5 to 400, one value per array (labels)",
+   "blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 858,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0093.mp4",
+  "sha256_mp4": "39db58b859ff80068f6554ef12a6c7ee8fa3d8567c28222dd7bd6192d25b7a8f",
+  "sha256_png": "2bc33b6d1c8a05773955d6ea8600d9984093f47aabb83173dcca5318fcea4dea",
+  "movie": {
+   "frames": 121,
+   "frames_out": 121,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0094": {
+  "step": "0094",
+  "lines": [
+   "bond_binding  adhesion maximum rho* (LL, bound density)",
+   "0.05 to 3, one value per array (labels)",
+   "blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 858,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0094.mp4",
+  "sha256_mp4": "444a5ce66f98ce1bf432db6c0cddb56d0e9f34a46eb806cc660a1256bca3d53e",
+  "sha256_png": "4fb496ea988dad4f8f9ae1fbbc1a8d8e32cc575a62c44711dcf43f0af7e4c5c6",
+  "movie": {
+   "frames": 121,
+   "frames_out": 121,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0095": {
+  "step": "0095",
+  "lines": [
+   "bond_springs  bond stiffness (bond_stiffness, the tether spring constant)",
+   "0.3 to 30, one value per array (labels)",
+   "blue inner cell grows, red outer cells do not; other adhesion parameters at their defaults"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 858,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0095.mp4",
+  "sha256_mp4": "2c3b25109342399721651aee774b949bdc7d038547d86c0106f649c1d818dd9b",
+  "sha256_png": "ffefe7a9ba590820873446fd0f547eee456218e6cdfd730e6e58d38f9991511a",
+  "movie": {
+   "frames": 121,
+   "frames_out": 121,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0118": {
+  "step": "0118",
+  "lines": [
+   "twin of movie 34 with 1000 points per cell (movie 34: 125)",
+   "whole sphere, cells opaque",
+   "doubles every 80 min, divides at 2x birth mass; surface threshold 0.3"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 660,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0118.mp4",
+  "sha256_mp4": "3236f98e2555e3c37997550fed529171f30e70c71bd793c28ec825ed5cf4e65f",
+  "sha256_png": "81c7b5fe05f91fc0445a2cd9670ca8b21d3adcc206363d416f67912cdba76b5f",
+  "movie": {
+   "frames": 118,
+   "frames_out": 118,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0119": {
+  "step": "0119",
+  "lines": [
+   "nucleus stiffness over the cytoplasm's (cell Young's modulus 20)",
+   "1 to 20, one value per cell (labels)",
+   "1000 points per cell, nucleus 400 (blue), cells translucent; both grow and divide"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 767,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0119.mp4",
+  "sha256_mp4": "6a33d5dd239d9343544575f5a3cb44c8aeb71f798892d8e0c60b20d3f28326cb",
+  "sha256_png": "36536ae0aa89a48f0f60c6f36d8a47d5956988e4233804872cf802f84209623d",
+  "movie": {
+   "frames": 126,
+   "frames_out": 126,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0122": {
+  "step": "0122",
+  "lines": [
+   "nucleus share of the cell's points (0.4 = 400 of 1000)",
+   "0.05 to 0.8, one value per cell (labels)",
+   "1000 points per cell; nucleus 4x stiffer (blue); both grow and divide"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 644,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.663,
+  "ink_outside_crop": 0,
+  "source": "mp4/0122.mp4",
+  "sha256_mp4": "5554439b0d20c90700bcfa01ab3eb484a6b082a3d7252ddddc93e77d8975da5a",
+  "sha256_png": "30f11821a9aec939eb9f09e9f9fe44dcd01d3dd45a4f0610c476be378381e14d",
+  "movie": {
+   "frames": 126,
+   "frames_out": 126,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0123": {
+  "step": "0123",
+  "lines": [
+   "cell Young's modulus (the nucleus is 4x stiffer)",
+   "5 to 400, one value per cell (labels)",
+   "1000 points per cell; nucleus 400 points, 4x stiffer (blue); both grow and divide"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 753,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.663,
+  "ink_outside_crop": 0,
+  "source": "mp4/0123.mp4",
+  "sha256_mp4": "4495a94b185431a49229d05cea8d72c2d2900e78cce8dde9f50fa76e4b1a5f5d",
+  "sha256_png": "313fcf688fbff6f87a70cc37d0372a40576f2c0899da0d23a64652a9f9d54cc6",
+  "movie": {
+   "frames": 126,
+   "frames_out": 126,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0124": {
+  "step": "0124",
+  "lines": [
+   "cell Maxwell relaxation time (min)",
+   "0.2 to 1000, one value per cell (labels)",
+   "1000 points per cell; nucleus 400 points, 4x stiffer (blue); both grow and divide"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 753,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.663,
+  "ink_outside_crop": 0,
+  "source": "mp4/0124.mp4",
+  "sha256_mp4": "f381c7243480af41bcfbdfcd7b2e488601f5f3ba97912011ebad3938c79fea63",
+  "sha256_png": "e31d6341e05eeb1d8fc9f3b9c46c222d6899fd26ca680fcc4ab8b45cc6219315",
+  "movie": {
+   "frames": 126,
+   "frames_out": 126,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0108": {
+  "step": "0108",
+  "lines": [
+   "the outer cells  outer cell stiffness (Young's modulus)",
+   "5 to 400, one value per sphere (labels)",
+   "1000 points per cell; blue cell grows and divides in a sphere of 20 red cells"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 719,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0108.mp4",
+  "sha256_mp4": "968899dafcfd66b73cf651fec220d44e919d113980b07215db5fad494a8b0311",
+  "sha256_png": "47028cf2701192bc98554d94866e6ffa0bf4025ff3fa1b523a423df68c2ff3d5",
+  "movie": {
+   "frames": 118,
+   "frames_out": 118,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0109": {
+  "step": "0109",
+  "lines": [
+   "bond_springs  bond damping (bond_damping)",
+   "0 to 30, one value per sphere (labels)",
+   "1000 points per cell; blue cell grows and divides in a sphere of 20 red cells"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 719,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0109.mp4",
+  "sha256_mp4": "f55aa83ddfb4d83eba35a0a14ebbc6159fb5fc94bf2c44404b6a0a43a837cca5",
+  "sha256_png": "d691dd5780667fd6e1a605fb4edd17f983d4bb3e281d19a6735f86dd1d35fa06",
+  "movie": {
+   "frames": 118,
+   "frames_out": 118,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0110": {
+  "step": "0110",
+  "lines": [
+   "bond_binding  adhesion maximum rho* (LL, bound density)",
+   "0.05 to 3, one value per sphere (labels)",
+   "1000 points per cell; blue cell grows and divides in a sphere of 20 red cells"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 719,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0110.mp4",
+  "sha256_mp4": "6f039a7bd6263d6f529ff7a23450aa00f6f31ea06416065bfba7fe954020a3ff",
+  "sha256_png": "5b2fa50523ccccb304a6c46ab814e8c3a368688bf74d2497d5aa35cdf0d0a802",
+  "movie": {
+   "frames": 118,
+   "frames_out": 118,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0111": {
+  "step": "0111",
+  "lines": [
+   "bond_springs  bond stiffness (bond_stiffness, the tether spring constant)",
+   "0.3 to 30, one value per sphere (labels)",
+   "1000 points per cell; blue cell grows and divides in a sphere of 20 red cells"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 824,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0111.mp4",
+  "sha256_mp4": "ef5d8925b25c01eafea7cae6e9db0dd9ac4438e180067647c59368b780f94b35",
+  "sha256_png": "5fa689201560a965e479ba477880e68a9f28f6579a03ae26883d48d3f8ae2917",
+  "movie": {
+   "frames": 118,
+   "frames_out": 118,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0112": {
+  "step": "0112",
+  "lines": [
+   "bond_binding  unbinding rate (unbinding_rate)",
+   "0.0003 to 3, one value per sphere (labels)",
+   "1000 points per cell; blue cell grows and divides in a sphere of 20 red cells"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 719,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0112.mp4",
+  "sha256_mp4": "f07cbff6a1f618c9e32317d9fe5a14d34b110d6eb18c325e242bfee85dff3164",
+  "sha256_png": "e3db831511829833b781351cc5241a08e2ad7cf426e237100656fee1ab036ef4",
+  "movie": {
+   "frames": 118,
+   "frames_out": 118,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0113": {
+  "step": "0113",
+  "lines": [
+   "bond_binding  bond strength (bond_strength, the Bell force scale)",
+   "0.05 to 30, one value per sphere (labels)",
+   "1000 points per cell; blue cell grows and divides in a sphere of 20 red cells"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 773,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0113.mp4",
+  "sha256_mp4": "62737e1471fb3e91ec830947a3eb3f733424d7fae5dd0a5978e7244e4a013964",
+  "sha256_png": "4e6197a7a0bf923ea4b0f69b809547ec439f3bd901c74e3e46abeb40463119a7",
+  "movie": {
+   "frames": 118,
+   "frames_out": 118,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0114": {
+  "step": "0114",
+  "lines": [
+   "bond_binding  binding rate (binding_rate)",
+   "0.03 to 30, one value per sphere (labels)",
+   "1000 points per cell; blue cell grows and divides in a sphere of 20 red cells"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 719,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0114.mp4",
+  "sha256_mp4": "d9203933b4ab8712cb40fbdd85e0fe84bbba58b448ee82e74d08d963547aff36",
+  "sha256_png": "5cfde636c00b82ca1b3892bafc7dd90a2121b61b13f9f6b19777919a96094e91",
+  "movie": {
+   "frames": 118,
+   "frames_out": 118,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0115": {
+  "step": "0115",
+  "lines": [
+   "bond_springs  bond range (bond_range, the longest bonded distance)",
+   "0.1 to 0.35, one value per sphere (labels)",
+   "1000 points per cell; blue cell grows and divides in a sphere of 20 red cells"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 830,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0115.mp4",
+  "sha256_mp4": "cd50c98efc3b6c0d468a17ea3f61501ac39f78e1bee659874b4248df2380a6f8",
+  "sha256_png": "e8dadde20227e32157d8409e32f880bd110a4bc870b0a95e82d0cbff7a491d48",
+  "movie": {
+   "frames": 118,
+   "frames_out": 118,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0116": {
+  "step": "0116",
+  "lines": [
+   "bond_springs  bond rest length (bond_rest_length)",
+   "0 to 0.25, one value per sphere (labels)",
+   "1000 points per cell; blue cell grows and divides in a sphere of 20 red cells"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 719,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0116.mp4",
+  "sha256_mp4": "75de062762a264cfa74884085222d9c9f4d52bb92aa40777cdc280c73469f4f6",
+  "sha256_png": "93b55f0f219e089ab8036c6a95eb87e86bfab7de1d7dc1622f8d78270755cd1a",
+  "movie": {
+   "frames": 118,
+   "frames_out": 118,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0125": {
+  "step": "0125",
+  "lines": [
+   "step 23 with the cadherin junction (cads)",
+   "bonds bound one by one, weighted by the rig's bound fraction vs the cleft",
+   "44 nm best cleft, calcium-bound MPM rods, smoothed 4 nm"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 730,
+  "h": 74,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0125.mp4",
+  "sha256_mp4": "e6bc3f975be91d9d3b5a1aaaa9358c34e9fb7224f6bc9db21e54f77498513eb4",
+  "sha256_png": "d95a81f6adc7692322557df802975157be53c6acfb55f3fbea7ff76c77dd8c87",
+  "movie": {
+   "frames": 118,
+   "frames_out": 118,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0126": {
+  "step": "0126",
+  "lines": [
+   "step 23 with the cadherin junction (cad)",
+   "bonds bound one by one, weighted by the rig's bound fraction vs the cleft",
+   "44 nm best cleft, calcium-bound MPM rods"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 730,
+  "h": 74,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0126.mp4",
+  "sha256_mp4": "8e253f9d8bc118539af41aef10b0959a4d8fe49d8835cc73ae9c5dca38e4cb09",
+  "sha256_png": "3db421c6871cf769b1409a5bcfb20ce66dc63495ea25ad58ff14d37d055a089f",
+  "movie": {
+   "frames": 118,
+   "frames_out": 118,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ },
+ "0127": {
+  "step": "0127",
+  "lines": [
+   "two cells at 0.2 um point spacing: the cadherin junction",
+   "125,000 points per cell, 10 um cells touching along a face",
+   "bonds bound one by one; bound density of the junction (right)"
+  ],
+  "x": 14,
+  "y": 14,
+  "w": 652,
+  "h": 76,
+  "channel_spread": 0.0,
+  "ground_err": 0.498,
+  "ink_outside_crop": 0,
+  "source": "mp4/0127.mp4",
+  "sha256_mp4": "37c5b31aaf0fb1af9902a2c66d4c2a181244ae792cfc25c9da0516de9337bc41",
+  "sha256_png": "bb2aa96d5c9c3cc1d1b43df785f63d00e06ad0fdc5f20a400c6fd5358c5a4111",
+  "movie": {
+   "frames": 61,
+   "frames_out": 61,
+   "fps": 16.0,
+   "fps_out": 16.0,
+   "size": [
+    1440,
+    1088
+   ],
+   "size_out": [
+    1440,
+    1088
+   ],
+   "codec": "h264",
+   "overlap_frames": 0
+  }
+ }
+}

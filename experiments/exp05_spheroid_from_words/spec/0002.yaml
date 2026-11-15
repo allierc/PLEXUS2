@@ -1,0 +1,62 @@
+general:
+  name: exp05_spheroid_v02_f1000
+  seed: 1
+  n_frames: 1000
+  dt: 1.0
+  record_cap: 1001
+  boundary: free
+  dim: 3
+  world: [30.0, 30.0, 30.0]
+  units: {length_um: 10.0, time_s: 600.0}
+sets:
+  cell:
+    n: 20
+    buffer: 1000
+    types:
+      cell: {fraction: 1.0}
+    state:
+      pos: {width: 3, role: coordinate, integration: first_order, boundary: world}
+      size: {width: 1}
+      contacts: {width: 1}
+      founder: {width: 1}
+fields: {}
+seed:
+- {op: seed_positions, at: cell, mode: ball, radius: 10.0, seed: 1}
+operators:
+- {op: thermal_bath, at: cell, kT: 0.045, mobility: 1.0, seed: 1}
+- {op: pair_potential, model: soft_adhesive, at: cell, sigma: 1.0, epsilon: 1.0, adhesion: 0.3, tail: 0.2, mobility: 1.0}
+- {op: cell_divide, implementation: point_adhesion, at: cell, rate: 0.00578, touch: 1.1, min_contacts: 1, offset: 0.5, size_cv: 0.1, seed: 1}
+schedule:
+- steps: [thermal_bath, pair_potential]
+  substep_dt: 0.01
+- cell_divide
+plotting:
+  renderer: vtk_points
+  subject: cell
+  dot_radius: {cell: 0.5}
+  glyphs_only: true
+  colors: {cell: '#c8805a'}
+  background: '#8d99a6'
+  foreground: white
+  box_frame: false
+  camera: {elev: 25, azim: 30}
+  zoom: 1.4
+  duration_s: 10
+  slow_motion: 1
+  real_time: false
+  curve_time: {per_frame_s: 0.1666667, unit: s}
+  curve:
+  - {quantity: 'count:cell', ylabel: cells, xlabel: time (h), ymin: 0}
+
+# --- auto: video descriptions (gemma-4-12B) ---
+descriptions:
+  movie:
+    description: A cluster of orange particles begins in a relatively compact arrangement in the center
+      of the frame. As time progresses, the particles begin to drift and spread outward, increasing the
+      overall volume of the cluster. The movement appears somewhat stochastic, with some particles moving
+      faster than others while maintaining a loose group structure. By the final frame, the particles
+      have dispersed significantly, occupying a much larger area of the simulation space.
+    objects: The scene contains a set of approximately 20 spherical particles. These particles are a uniform
+      burnt orange color and appear to be of a consistent size. They are initially arranged in a dense,
+      irregular cluster with no visible connections between them. Throughout the simulation, they maintain
+      their individual shapes and colors while changing their spatial distribution.

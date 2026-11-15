@@ -1,0 +1,1 @@
+slide 13: cell growth + Gray-Scott Turing pattern composed on the growing shell (11 dynamics). Run: tissue/composition_coral (was r021_12).

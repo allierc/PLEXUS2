@@ -1,0 +1,414 @@
+general:
+  name: exp01_physgaussian_bounce_v1
+  seed: 3
+  n_frames: 480
+  dt: 0.004166666666666667
+  boundary: wall
+  dim: 3
+  world:
+  - 0.5
+  - 0.5
+  - 0.5
+  save_data: true
+  units:
+    length_um: 1000000.0
+    time_s: 1.0
+    force_nN: 1000000000.0
+sets:
+  jelly_c:
+    n: 1
+    start:
+    - - 0.075
+      - 0.075
+      - 0.25
+    types:
+      jelly:
+        fraction: 1.0
+        material: elastic
+        youngs: 200000.0
+        density: 1000.0
+        shape: obj
+        obj: armadillo
+        obj_rotate: none
+  jelly_pt:
+    parent: jelly_c
+    per_parent: 150000
+    radius: 0.5
+    density: 1000.0
+    particle_mass: 1.2564697314519808e-06
+    entity: mpm_particle
+  metal_c:
+    n: 1
+    start:
+    - - 0.2
+      - 0.075
+      - 0.25
+    types:
+      metal:
+        fraction: 1.0
+        material: elastic
+        youngs: 500000.0
+        density: 1000.0
+        shape: obj
+        obj: armadillo
+        obj_rotate: none
+  metal_pt:
+    parent: metal_c
+    per_parent: 150000
+    radius: 0.5
+    density: 1000.0
+    particle_mass: 1.2564697314519808e-06
+    entity: mpm_particle
+  sand_c:
+    n: 1
+    start:
+    - - 0.325
+      - 0.075
+      - 0.25
+    types:
+      sand:
+        fraction: 1.0
+        material: elastic
+        youngs: 500000.0
+        density: 1000.0
+        shape: obj
+        obj: armadillo
+        obj_rotate: none
+  sand_pt:
+    parent: sand_c
+    per_parent: 150000
+    radius: 0.5
+    density: 1000.0
+    particle_mass: 1.2564697314519808e-06
+    entity: mpm_particle
+  brittle_c:
+    n: 1
+    start:
+    - - 0.45
+      - 0.075
+      - 0.25
+    types:
+      brittle:
+        fraction: 1.0
+        material: elastic
+        youngs: 200000.0
+        density: 1000.0
+        shape: obj
+        obj: armadillo
+        obj_rotate: none
+  brittle_pt:
+    parent: brittle_c
+    per_parent: 150000
+    radius: 0.5
+    density: 1000.0
+    particle_mass: 1.2564697314519808e-06
+    entity: mpm_particle
+  ball0_c:
+    n: 1
+    start:
+    - - 0.075
+      - 0.33
+      - 0.25
+    types:
+      steel:
+        fraction: 1.0
+        material: elastic
+        youngs: 1000000.0
+        density: 8000.0
+        shape: ball
+  ball0_pt:
+    parent: ball0_c
+    per_parent: 12000
+    radius: 0.028
+    density: 8000.0
+    particle_mass: 6.130154838364724e-05
+  ball1_c:
+    n: 1
+    start:
+    - - 0.2
+      - 0.33
+      - 0.25
+    types:
+      steel:
+        fraction: 1.0
+        material: elastic
+        youngs: 1000000.0
+        density: 8000.0
+        shape: ball
+  ball1_pt:
+    parent: ball1_c
+    per_parent: 12000
+    radius: 0.028
+    density: 8000.0
+    particle_mass: 6.130154838364724e-05
+  ball2_c:
+    n: 1
+    start:
+    - - 0.325
+      - 0.33
+      - 0.25
+    types:
+      steel:
+        fraction: 1.0
+        material: elastic
+        youngs: 1000000.0
+        density: 8000.0
+        shape: ball
+  ball2_pt:
+    parent: ball2_c
+    per_parent: 12000
+    radius: 0.028
+    density: 8000.0
+    particle_mass: 6.130154838364724e-05
+  ball3_c:
+    n: 1
+    start:
+    - - 0.45
+      - 0.33
+      - 0.25
+    types:
+      steel:
+        fraction: 1.0
+        material: elastic
+        youngs: 1000000.0
+        density: 8000.0
+        shape: ball
+  ball3_pt:
+    parent: ball3_c
+    per_parent: 12000
+    radius: 0.028
+    density: 8000.0
+    particle_mass: 6.130154838364724e-05
+fields:
+  mpm_grid:
+    frame: mpm_grid
+    n_grid: 192
+operators:
+- op: gravity
+  at: jelly_c
+  g: 9.81
+- op: gravity
+  at: metal_c
+  g: 9.81
+- op: gravity
+  at: sand_c
+  g: 9.81
+- op: gravity
+  at: brittle_c
+  g: 9.81
+- op: mpm_strain
+  at: jelly_pt
+  implementation: warp
+- op: mpm_strain
+  at: metal_pt
+  implementation: warp
+- op: mpm_strain
+  at: sand_pt
+  implementation: warp
+- op: mpm_strain
+  at: brittle_pt
+  implementation: warp
+- op: mpm_tear
+  at: brittle_pt
+  stretch_break: 1.25
+- op: mpm_plasticity
+  at: metal_pt
+  law: metal
+  yield_stress: 5000.0
+- op: mpm_plasticity
+  at: sand_pt
+  law: sand
+  friction_angle: 30.0
+- op: mpm_scatter
+  at: mpm_grid
+  from: jelly_pt
+  drag: 0.0
+  a_max: 200.0
+  implementation: warp
+  polar: higham
+- op: mpm_scatter
+  at: mpm_grid
+  from: metal_pt
+  drag: 0.0
+  a_max: 200.0
+  implementation: warp
+  polar: higham
+- op: mpm_scatter
+  at: mpm_grid
+  from: sand_pt
+  drag: 0.0
+  a_max: 200.0
+  implementation: warp
+  polar: higham
+- op: mpm_scatter
+  at: mpm_grid
+  from: brittle_pt
+  drag: 0.0
+  a_max: 200.0
+  implementation: warp
+  polar: higham
+- op: mpm_grid_update
+  at: mpm_grid
+  wall_damp: 1.0
+  cell_surface_tension: 0.0
+  wall_friction: 0.8
+- op: mpm_rigid_body
+  at: ball0_pt
+  from: mpm_grid
+  velocity:
+  - 0.0
+  - -2.5
+  - 0.0
+  mass: 0.25
+  contact: slip
+  g: 9.81
+  implementation: bounce
+  restitution: 0.7
+- op: mpm_rigid_body
+  at: ball1_pt
+  from: mpm_grid
+  velocity:
+  - 0.0
+  - -2.5
+  - 0.0
+  mass: 0.25
+  contact: slip
+  g: 9.81
+  implementation: bounce
+  restitution: 0.7
+- op: mpm_rigid_body
+  at: ball2_pt
+  from: mpm_grid
+  velocity:
+  - 0.0
+  - -2.5
+  - 0.0
+  mass: 0.25
+  contact: slip
+  g: 9.81
+  implementation: bounce
+  restitution: 0.7
+- op: mpm_rigid_body
+  at: ball3_pt
+  from: mpm_grid
+  velocity:
+  - 0.0
+  - -2.5
+  - 0.0
+  mass: 0.25
+  contact: slip
+  g: 9.81
+  implementation: bounce
+  restitution: 0.7
+- op: mpm_gather
+  at: jelly_pt
+  from: mpm_grid
+  wall_damp: 1.0
+  vmax: 1000000000.0
+  implementation: warp
+- op: mpm_gather
+  at: metal_pt
+  from: mpm_grid
+  wall_damp: 1.0
+  vmax: 1000000000.0
+  implementation: warp
+- op: mpm_gather
+  at: sand_pt
+  from: mpm_grid
+  wall_damp: 1.0
+  vmax: 1000000000.0
+  implementation: warp
+- op: mpm_gather
+  at: brittle_pt
+  from: mpm_grid
+  wall_damp: 1.0
+  vmax: 1000000000.0
+  implementation: warp
+schedule:
+- gravity
+- gravity
+- gravity
+- gravity
+- substep_dt: 4.385965e-05
+  steps:
+  - mpm_strain
+  - mpm_strain
+  - mpm_strain
+  - mpm_strain
+  - mpm_tear
+  - mpm_plasticity
+  - mpm_plasticity
+  - mpm_scatter
+  - mpm_scatter
+  - mpm_scatter
+  - mpm_scatter
+  - mpm_grid_update
+  - mpm_rigid_body
+  - mpm_rigid_body
+  - mpm_rigid_body
+  - mpm_rigid_body
+  - mpm_gather
+  - mpm_gather
+  - mpm_gather
+  - mpm_gather
+plotting:
+  renderer: vtk_points
+  background: '#8d99a6'
+  foreground: white
+  up_axis: 1
+  camera:
+    elev: 8
+    azim: -90
+  zoom: 1.6
+  box_frame: false
+  render_3d: dots
+  dot_size: 1.0
+  duration_s: 10
+  slow_motion: 1
+  max_frames: 481
+  fps: 48
+  snap_budget_gb: 8
+  hide_sets:
+  - jelly_c
+  - metal_c
+  - sand_c
+  - brittle_c
+  - ball0_c
+  - ball1_c
+  - ball2_c
+  - ball3_c
+  colors:
+    jelly:
+    - 0.35
+    - 0.55
+    - 0.3
+    metal:
+    - 0.55
+    - 0.62
+    - 0.72
+    sand:
+    - 0.95
+    - 0.8
+    - 0.45
+    brittle:
+    - 0.93
+    - 0.33
+    - 0.23
+  also_sets:
+  - jelly_pt
+  - metal_pt
+  - sand_pt
+  - brittle_pt
+  - ball0_pt
+  - ball1_pt
+  - ball2_pt
+  - ball3_pt
+  also_colors:
+    ball0_pt: '#d9dde4'
+    ball1_pt: '#d9dde4'
+    ball2_pt: '#d9dde4'
+    ball3_pt: '#d9dde4'
+    metal_pt: '#8c9db8'
+    sand_pt: '#f2cc73'
+    brittle_pt: '#ed553b'
+    jelly_pt: '#5a8c4d'

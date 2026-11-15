@@ -1,0 +1,1 @@
+slide 12: cell growth and division on the 3D vertex model, no chemistry (6 dynamics). Run: tissue/composition_grow_divide (was grow_divide).

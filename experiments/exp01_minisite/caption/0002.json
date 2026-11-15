@@ -1,0 +1,12 @@
+{
+  "model": "gemma-4-12B-it",
+  "root": "/workspace/Plexus/experiments/exp01_minisite/mp4",
+  "records": [
+    {
+      "video": "/workspace/Plexus/experiments/exp01_minisite/mp4/0019.mp4",
+      "name": "0019",
+      "description": "The simulation begins with 100 nodes arranged in a static, roughly circular grid pattern. As the simulation progresses, spring-like connections appear between the nodes, causing them to move toward a central point. The nodes then begin to oscillate and orbit around the center, creating a complex, tangled web of intersecting lines. By the final frames, the system reaches a dynamic equilibrium where the nodes continue to move in a chaotic but bounded motion.",
+      "objects": "The scene contains 100 small, circular nodes that serve as the primary points of interest. These nodes are colored in a variety of hues, including blue, orange, and green. They are connected by thin, curved lines that represent the spring forces between them. The overall topology evolves from a structured grid into a dense, interconnected cluster of moving points and lines."
+    }
+  ]
+}

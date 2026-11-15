@@ -1,0 +1,1 @@
+slide 14: cell growth + Turing pattern, the reaction faster than growth: the shell folds (11 dynamics). Run: tissue/composition_folds (was r020_01).

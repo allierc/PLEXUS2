@@ -1,0 +1,4 @@
+time   2026-11-12 23:35:37
+run    tissue/mpm_s27_base (interface)
+drawn  the first stored rows of the run
+why    THE TWO CELLS 20 AND 5 cut through the pair (yellow: tether, white: contact pair): the base (step 27's settings); at row 28 (frame 28): median gap of the facing front points 42 nm, mixing 0.442, J 2.000 (the base 2.000)

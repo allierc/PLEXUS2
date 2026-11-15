@@ -1,0 +1,322 @@
+general:
+  name: exp09_land_it07
+  headline: 'exp09 it07: a crowded molecular landscape of 404 MPM bodies (25 % of a slab 192 x 108 x 52 nm)'
+  title: 'iteration 7, from it06 ONE change: the contact tension between a membrane patch and a protein through the membrane is -0.05 instead of -0.2 (patch to patch stays -0.2, the sheet''s own hold): in it02 and it06 that glue pulled the proteins'' surface along the sheet and the patches over the proteins (proteins'' radius of gyration 1.18-1.47 of its start, whatever their stiffness); a quarter of the glue should leave them standing through the sheet, if the patches closing round them do not squeeze them out'
+  seed: 1
+  n_frames: 1000
+  dt: 1.0
+  record_cap: 251
+  save_every_min: 10.0
+  boundary: free
+  dim: 3
+  world:
+  - 20.4
+  - 12.0
+  - 6.4
+  units:
+    length_um: 0.01
+    time_s: 2.0e-07
+fields:
+  mpm_grid:
+    frame: mpm_grid
+    n_grid: 15
+    per_parent: cell
+    cell_box: 3.0
+sets:
+  cell:
+    n: 404
+    type_layout: ordered
+    types:
+      ribosome:
+        count: 18
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      chaperonin:
+        count: 26
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      rod:
+        count: 26
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      trimer:
+        count: 26
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      enzyme:
+        count: 57
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      small:
+        count: 110
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      lipid:
+        count: 85
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      channel:
+        count: 10
+        shape: ball
+        material: elastic
+        youngs: 100.0
+        density: 1.0
+      antibody:
+        count: 16
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      serum:
+        count: 30
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: rate
+        record: false
+  pt:
+    entity: mpm_particle
+    parent: cell
+    per_parent: 343
+    density: 1.0
+    radius: 0.5
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: rate
+        record: false
+      pid:
+        width: 1
+      cellc:
+        width: 1
+        record: false
+operators:
+- op: thermal_bath
+  implementation: langevin
+  at: pt
+  friction: 0.05
+  kT: 0.0001
+  substep_dt: 0.01
+  seed: 1
+- op: active_force
+  model: box_slab
+  at: pt
+  wall_stiffness: 400.0
+  lo:
+  - 0.6
+  - 0.6
+  - 0.6
+  hi:
+  - 19.8
+  - 11.4
+  - 5.8
+- op: pair_potential
+  model: cell_contact
+  at: pt
+  cells: cell
+  repulsion_strength: 600.0
+  contact_slack: 0.2
+  contact_surface_tension:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - -0.2
+    - -0.05
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - -0.05
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  contact_edge_width: 0.2
+- op: mpm_strain
+  at: pt
+  implementation: default
+- op: mpm_scatter
+  at: mpm_grid
+  from: pt
+  drag: 0.0
+  implementation: default
+- op: mpm_grid_update
+  at: mpm_grid
+  implementation: warp_pp_balanced
+- op: mpm_gather
+  at: pt
+  from: mpm_grid
+  implementation: default
+- op: aggregate_centroid
+  at: cell
+  child: pt
+schedule:
+- steps:
+  - thermal_bath
+  - active_force
+  - pair_potential
+  - mpm_strain
+  - mpm_scatter
+  - mpm_grid_update
+  - mpm_gather
+  substep_dt: 0.01
+  capture: false
+- aggregate_centroid
+seed:
+- op: seed_positions
+  model: from_points_ragged
+  at: pt
+  cell_set: cell
+  points: experiments/exp09_molecular_landscape/data/seed_it07.npz
+  um_per_unit: 0.01
+  centre_um:
+  - 0.0
+  - 0.0
+  - 0.0
+  centre:
+  - 0.0
+  - 0.0
+  - 0.0
+plotting:
+  renderer: vtk_points
+  subject: pt
+  render_3d: contour
+  point_volume: 0.008000000000000002
+  cell_colours: type
+  colors:
+    ribosome: '#9B5DE5'
+    chaperonin: '#4D96FF'
+    rod: '#F15BB5'
+    trimer: '#E9C46A'
+    enzyme: '#2A9D8F'
+    small: '#8AC926'
+    lipid: '#F4A261'
+    channel: '#E63946'
+    antibody: '#00BBF9'
+    serum: '#43AA8B'
+  surface_opacity: 1.0
+  background: '#8d99a6'
+  foreground: white
+  box_frame: false
+  camera:
+    elev: 90
+    azim: -90
+  zoom: 1.0
+  duration_s: 10
+  slow_motion: 1

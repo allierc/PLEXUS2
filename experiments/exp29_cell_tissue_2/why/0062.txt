@@ -1,0 +1,5 @@
+time   2026-11-02 13:17:21
+run    tissue/mpm_grid3x3_width_sweep_p1000 (mpm; ink look, every cell its own colour, by id, tools/exp29_studio.py)
+drawn  126 of 126 stored rows; activator scale 0..1 (99.5th percentile of the whole run)
+insets cells 9 -> 37; activator distribution; cell volume (µm³) mean 1000 -> 1357, y to 2285
+why    WIDTH SWEEP on the minimal 3 x 3 rig (Cedric, 2026-10-28, 'step 57'), run locally on cuda:0 from /workspace/Plexus: contact overlap 2 for every cell (no overlap repulsion), contact_tension -0.1 (an attraction between touching cells), and the interface width w of the contact per family, in array order (x fastest, then y): 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.6, 0.8, 1.0 (a length in world units, 1 unit = 10 um; it scales the interface-tension force); everything else as the previous steps; every cell its own colour by id, no cut-away, no activator inset [Redrawn 2026-10-31 for the unified look: every cell its own colour by id in the true flat_ink palette (the renders of 2026-10-28 showed its complement); every family labelled with its width value (spec plotting.cell_labels)]  -- RERUN AT 1000 POINTS PER CELL (Cedric, 2026-11-02)

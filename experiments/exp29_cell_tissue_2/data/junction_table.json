@@ -1,0 +1,53 @@
+{
+ "gaps": [
+  30,
+  34,
+  38,
+  42,
+  44,
+  46,
+  48,
+  50
+ ],
+ "bound": [
+  0.0,
+  0.0,
+  0.0,
+  0.09900990099009897,
+  0.1666666666666667,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "bound_se": [
+  0.0,
+  0.0,
+  0.0,
+  0.03651483716701106,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "r0": [
+  null,
+  null,
+  null,
+  1.1081101894378662,
+  1.0071498155593872,
+  null,
+  null,
+  null
+ ],
+ "kappa": [
+  null,
+  null,
+  null,
+  2.3638505935668945,
+  9.327400207519531,
+  null,
+  null,
+  null
+ ],
+ "unit": "gap in nm; bound = fraction of EC1 tips within 3 nm of an opposite EC1 tip, mean over the second half of 600 frames; r0, kappa = mean and kT/variance of the bound pairs' tip distance (nm, kT/nm2)"
+}

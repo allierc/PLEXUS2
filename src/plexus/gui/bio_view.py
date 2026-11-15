@@ -1,0 +1,2143 @@
+"""The bio page's eye is the movie renderer.
+
+One `View` per session: the spec built and seeded exactly as a run would (`engine.build`,
+`engine.seed`), then `plexus.live_movie.LiveMovie` draws frame 0 off-screen -- the same mesh,
+the same sphere glyphs of world radius (`plotting.dot_radius`), the same palette a generated
+movie has. The page shows that plotter's screenshot and sends camera moves, picks and
+visibility toggles here; nothing is drawn twice in two codebases, so what the page shows is what
+the movie will show.
+
+Picking is a projection, not a VTK picker: every live object (a cluster, a piece, a cell
+centroid, a vertex) is projected through the plotter's own camera to the screen and the nearest
+to the click within a few pixels wins, nearer-to-camera on a tie. That works for glyph actors
+(whose point ids are the sphere's, not the piece's) and costs one matrix product.
+
+VTK is not thread-safe and its off-screen OpenGL context belongs to the thread that made it; the
+server handles each request on its own thread, and a second view built on a different thread
+than the first died in VTK with `std::bad_array_new_length`. So EVERY call that touches the
+plotter runs on one dedicated thread (`_vtk`), whichever request thread asks.
+"""
+from __future__ import annotations
+
+import io
+import os
+import tempfile
+import threading
+import sys
+import time
+
+import numpy as np
+
+from concurrent.futures import ThreadPoolExecutor
+
+LOCK = threading.RLock()
+CURRENT: dict = {"view": None}
+_EXEC = ThreadPoolExecutor(max_workers=1, thread_name_prefix="plexus-vtk")
+_VTK_THREAD: dict = {"ident": None}
+# REQUESTS FOR THE VTK THREAD WAIT HERE, NOT ONLY IN THE EXECUTOR. While a run occupies the VTK
+# thread (the pipeline is called ON it, see `View.run`, because a second off-screen plotter on a
+# second thread dies inside VTK), the executor's own queue is stuck behind the run; the run's
+# per-frame hook drains THIS queue instead, so a camera move from the page is answered between two
+# frames rather than after the last one. Outside a run the executor drains it as before.
+import queue as _queue
+_PENDING: "_queue.Queue" = _queue.Queue()
+
+
+def _drain() -> int:
+    """Answer every waiting request, on the VTK thread. Returns how many were served."""
+    n = 0
+    while True:
+        try:
+            fn, args, kwargs, fut = _PENDING.get_nowait()
+        except _queue.Empty:
+            return n
+        if fut.set_running_or_notify_cancel():
+            try:
+                fut.set_result(fn(*args, **kwargs))
+            except BaseException as e:                               # noqa: BLE001
+                fut.set_exception(e)
+        n += 1
+
+
+def _vtk(fn, *args, **kwargs):
+    """Run `fn` on the one VTK thread and return its result (a call from that thread runs inline)."""
+    if _VTK_THREAD["ident"] == threading.get_ident():
+        return fn(*args, **kwargs)
+    from concurrent.futures import Future
+    fut: Future = Future()
+    _PENDING.put((fn, args, kwargs, fut))
+
+    def _serve():
+        _VTK_THREAD["ident"] = threading.get_ident()
+        _drain()
+    _EXEC.submit(_serve)
+    return fut.result()
+
+
+def _npz_rows(z, path, key, rows):
+    """`z[key][rows]` without reading the whole member. An npz member stored UNCOMPRESSED (numpy's default
+    `np.savez`) is a plain .npy inside the zip, so it is memory-mapped at its offset and only the kept rows are
+    touched: the 144 GB position array of a 5,000,000-point, 2,401-frame run (exp01 minisite step 5, 2026-10-27)
+    took minutes to open in the 3D view because `z[key]` read it whole before the stride. A compressed member
+    falls back to the whole read."""
+    import zipfile
+    try:
+        with zipfile.ZipFile(path) as zf:
+            info = zf.getinfo(key + ".npy")
+            if info.compress_type != zipfile.ZIP_STORED:
+                return z[key][rows]
+            with zf.open(info) as m:
+                version = np.lib.format.read_magic(m)
+                shape, fortran, dtype = np.lib.format._read_array_header(m, version)
+                hdr = m.tell()
+            if fortran:
+                return z[key][rows]
+        with open(path, "rb") as f:                                # the member's data offset in the zip file
+            f.seek(info.header_offset)
+            fh = f.read(30)
+            n_name, n_extra = int.from_bytes(fh[26:28], "little"), int.from_bytes(fh[28:30], "little")
+            data_off = info.header_offset + 30 + n_name + n_extra + hdr
+        mm = np.memmap(path, dtype=dtype, mode="r", offset=data_off, shape=tuple(shape))
+        return np.ascontiguousarray(mm[rows])
+    except Exception:                                            # noqa: BLE001
+        return z[key][rows]
+
+
+class View:
+    def __init__(self, spec_path: str, device: str = "cpu", px: int = 1000):
+        from plexus import engine, schema
+        from plexus.gui import bio
+        from plexus.live_movie import LiveMovie
+        t0 = time.time()
+        sim = schema.load(spec_path)
+        H = engine.build(sim, device)
+        self.spec_path = spec_path
+        try:
+            engine.seed(H, sim, device)
+        except Exception as e_:                                  # noqa: BLE001
+            # A RECORDED STEP WHOSE SEED TODAY'S CODE REFUSES. The watcher re-opens specs from the record, and the
+            # engine moves on after them: builder/exp_02_bacterium step 73 names an `origin` for a set contained in
+            # `cell`, which `cloud_seed` has refused since (2026-09-27, "drop `origin`"). The record is not rewritten
+            # to suit the code; the scene starts from the run's OWN first recorded frame instead -- which is what the
+            # 3-D view then replays anyway. Only when there is no recorded run does the error stand.
+            n_ = self._seed_from_record(H)
+            if not n_:
+                raise
+            print(f"[view] this spec's seed no longer runs ({type(e_).__name__}: {str(e_)[:160]}); the scene starts "
+                  f"from the recorded run's first frame instead ({n_} sets)", flush=True)
+            self.seed_note = f"seeded from the recorded run (the spec's own seed fails today: {str(e_)[:120]})"
+        self.sim, self.H, self.spec_path = sim, H, spec_path
+        self._types_from_record()
+        self.scene = bio.scene_from(H, sim, spec_path)
+        style = dict(sim.plotting or {})
+        style.pop("stills", None)                           # the page writes no stills; the section inset stays
+        # THE CURVE PANELS STAY. They were dropped here ("the curves need a clip") when nothing on
+        # the page could ask for one; the plot list does now. A LIVE panel needs its y axis fixed
+        # in advance (the renderer refuses to draw one that would rescale under itself, which would
+        # make a rising curve and a falling axis indistinguishable), so a curve that does not say
+        # `ymin`/`ymax` is given one MEASURED AT THE SEED: 0 to three times the seeded value, and
+        # 0..1 for a fraction. The spec's own numbers, when it has them, are left alone.
+        _curves = style.get("curve")
+        if _curves:
+            style["curve"] = [dict(c) if isinstance(c, dict) else {"quantity": str(c)}
+                              for c in (_curves if isinstance(_curves, (list, tuple)) else [_curves])]
+            for c in style["curve"]:                        # provisional; replaced below from the seed
+                c.setdefault("ymin", 0.0); c.setdefault("ymax", 1.0)
+        style["real_time"] = False
+        # a walled box IS the scene (the balls bounce on its floor): keep its frame; a free tissue has
+        # no wall, and its box was only a camera hint that shrank the cyst to a tenth of the picture
+        style["box_frame"] = str(getattr(sim, "boundary", "") or "").lower() == "wall"
+        style["scale_bar"] = False                               # the movie's bar sits at the box edge; ours follows the view
+        # `plotting.view_3d: contour` -- THE VIEW CONTOURS WHAT THE MOVIE DRAWS AS DOTS (Cedric, 2026-10-27, the exp01
+        # minisite record: "in main viewer keep small dots", the isosurface only as this view's toggle). The record movie
+        # keeps the spec's own `render_3d`; the view's renderer alone is told to contour, per type when the set is typed
+        # (two droplets in two hues), so `set_look` has a surface to switch to -- the view still opens in dots.
+        # The default for a vtk_points spec drawn as dots: the view contours (Cedric, same day, on the mpm88 step: the
+        # toggle "still doing nothing to movie 2"); `plotting.view_3d: dots` opts out. A contour that cannot be built
+        # (no typed set, nothing to contour) falls back to dots and the toggle stays hidden, as before.
+        _v3 = str(style.get("view_3d", "") or "").lower()
+        _r3 = str(style.get("render_3d", "dots") or "dots").lower()
+        # The default for a vtk_points spec drawn as dots: the view contours (Cedric, same day, on the mpm88 step: the
+        # toggle "still doing nothing to movie 2"); `plotting.view_3d: dots` opts out. Built AT OPEN, inside the first
+        # frame, as the spec's own contour is: a build deferred to the first switch came out opaque and speckled
+        # under the ink pass (2026-10-27, tried and reverted), and the open costs a few seconds for it.
+        if _v3 == "contour" or (not _v3 and _r3 == "dots" and str(style.get("renderer", "")) == "vtk_points"):
+            style["render_3d"] = "contour"
+            style.setdefault("contour_by_type", True)
+        style["cross_section_height"] = min(float(style.get("cross_section_height", 0.24) or 0.24), 0.2)
+        u = getattr(sim, "units", None)
+        dec = bool(getattr(u, "declared", False))                # the scale bar needs declared units, as the movie does
+        self._tmp = tempfile.mkdtemp(prefix="plexus_bio_")
+        free = str(getattr(sim, "boundary", "") or "").lower() == "free"
+        self.panel = None
+        self.lm = LiveMovie(out=os.path.join(self._tmp, "view.mp4"), world=list(sim.world_size), n_frames=1,
+                            up=int(style.get("up_axis", 2)), name=sim.name, sim=sim, style=style,
+                            centred=free and not any(k in (sim.sets or {}) for k in ("mpm_particle", "cytosol", "nucleus")),
+                            can_curve=False, render_n=400_000, stills=0, px=int(px),
+                            dt=getattr(sim, "dt", None),
+                            time_s=(float(u.time_s) if dec else None),
+                            length_um=(float(u.length_um) if dec else None),
+                            force_nN=(float(u.force_nN) if (dec and getattr(u, "force_nN", None) is not None) else None))
+        self.lm(H, 0)                                            # builds every actor, writes one frame
+        if self.lm.failed:
+            raise RuntimeError(f"renderer: {self.lm.failed}")
+        # THE PANELS' Y AXES, FROM THE SEED. A live panel must fix its axis in advance (a curve
+        # that rescaled under itself would be unreadable), and the renderer's own `_curve_row` is
+        # the value the panel will plot -- so ask it once, at frame 0, and give each axis 0 to 3x
+        # that (0..1 for a fraction, the live count x3 for `cells`). The spec's own ymin/ymax win.
+        if _curves:
+            self._seed_curve_axes(H, _curves)
+        if getattr(self.lm, "cs", None) is not None:             # the first frame builds the inset but fills it from frame 1
+            self.lm._update_cross_section(H)
+        self.p = self.lm.p
+        cam = self.p.camera
+        # FRAME THE OBJECTS, NOT THE BOX. The movie frames the world box (a 50-unit box around a
+        # 5-unit cyst leaves the cyst a tenth of the frame); the page is about the objects, so the
+        # camera looks at their centre from a distance where their bounding sphere fills the view.
+        self.focal = np.asarray(cam.focal_point, float)
+        self.dist0 = float(np.linalg.norm(np.asarray(cam.position, float) - self.focal))
+        P = np.concatenate([np.asarray(st["pos"], float) for st in self.scene["sets"].values() if st.get("pos")], 0) \
+            if any(st.get("pos") for st in self.scene["sets"].values()) else None
+        if P is not None and len(P):
+            P = P[np.abs(P).max(1) < 1e5]                        # parked slots sit at -1e6
+            if P.shape[1] == 2:                                  # a 2-D world sits in the z = 0 plane
+                P = np.concatenate([P, np.zeros((len(P), 1))], 1)
+            lo, hi = P.min(0), P.max(0)
+            self.focal = 0.5 * (lo + hi) + np.asarray(getattr(self.lm, "_shift", 0.0) or 0.0, float)
+            R = 0.5 * float(np.linalg.norm(hi - lo))
+            self.dist0 = 1.15 * R / np.tan(np.radians(float(cam.view_angle) / 2.0)) if R > 0 else self.dist0
+            self.scale0 = 1.15 * R if R > 0 else float(cam.parallel_scale)
+        else:
+            self.scale0 = float(cam.parallel_scale)
+        # A FIXED CAMERA ON THE BOX for a walled scene (Cedric, 2026-10-27: "the new movies are centred on the object,
+        # always fixed camera; the same with the 3D render"): the movie frames the world box, so the view does too,
+        # once, and `show_frame` never re-frames on the frame's points. A free scene (no walls, a cyst in an open
+        # world) keeps the page's object framing above.
+        self.fixed_frame = str(getattr(sim, "boundary", "") or "").lower() == "wall"
+        if self.fixed_frame:
+            w = np.asarray(list(sim.world_size) + [0.0] * (3 - len(list(sim.world_size))), float)[:3]
+            self.focal = 0.5 * w + np.asarray(getattr(self.lm, "_shift", 0.0) or 0.0, float)
+            R = 0.5 * float(np.linalg.norm(w))
+            self.dist0 = 1.15 * R / np.tan(np.radians(float(cam.view_angle) / 2.0))
+            self.scale0 = 1.15 * R
+        self.azim, self.elev, self.zoom = 30.0, 20.0, 1.0
+        self.up_axis = int(style.get("up_axis", 2))              # a material box is y-up, a tissue z-up
+        if int(getattr(sim, "dim", 3)) == 2:
+            # A 2-D WORLD IS LOOKED AT FROM +z WITH y UP: the orbit's up axis is y and the camera
+            # starts on the +z side (azim 90 around y at elevation 0), so the plane fills the view.
+            self.up_axis = 1
+            self.azim, self.elev = 90.0, 0.0
+        self.pick = None
+        self.hidden: set = set()
+        self.RUN = {"running": False, "frame": 0, "n_frames": 0, "seconds": 0.0, "error": None, "stop": False, "counts": {}, "frames_kept": 0}
+        self.snaps: list = []                                    # the run's frames as level states, for PLAY at any camera
+        self.seconds = round(time.time() - t0, 2)
+        self.set_camera(self.azim, self.elev, self.zoom)
+        _vtk(self._look_setup)
+
+    def _seed_curve_axes(self, H, declared):
+        lm = self.lm
+        decl = [c if isinstance(c, dict) else {"quantity": str(c)} for c in
+                (declared if isinstance(declared, (list, tuple)) else [declared])]
+        changed = False
+        for cv, d in zip(getattr(lm, "_curves", []) or [], decl):
+            if "ymin" in d and "ymax" in d:
+                continue
+            q = cv["q"]
+            try:
+                if q == "cells":
+                    hi = 3.0 * max(1.0, float(np.nansum(lm._curve_row(H, cv["lvl"], q, cv["ntype"], cv["nt"])[:, 0])))
+                elif q in ("phase", "cycle_progress"):
+                    hi = 1.0
+                else:
+                    r = lm._curve_row(H, cv["lvl"], q, cv["ntype"], cv["nt"])
+                    v = float(np.nanmax(np.asarray(r)[:, 0]))
+                    hi = 3.0 * v if np.isfinite(v) and v > 0 else 1.0
+            except Exception as e:                           # noqa: BLE001 -- a panel is not the run
+                print(f"[view] curve {q}: no seed range ({type(e).__name__}: {e})", flush=True)
+                continue
+            cv["ch"].y_axis.range = [0.0, float(hi)]
+            changed = True
+        if changed:
+            self.lm.p.render()
+
+    # ------------------------------------------------------------------ camera and picture
+    def set_camera(self, azim=None, elev=None, zoom=None, roll=None):
+        return _vtk(self._set_camera, azim, elev, zoom, roll)
+
+    # THE SLICE (the human, 2026-09-26: "one button that shows a slice cross section"): the renderer's own
+    # `near_side: far` -- every surface keeps only the half BEHIND a plane through the scene's centre, normal to the
+    # view, so the camera looks into the protein through the cut face (a channel's lumen and the ions in it). One
+    # plane for every part (`near_side_centre` = the focal point), re-cut whenever the view turns (`_set_camera`
+    # calls `near_side_refresh`). Off restores whatever the spec itself asked for.
+    def set_cut(self, on: bool):
+        return _vtk(self._set_cut, bool(on))
+
+    # THE GLASS SWITCH (the human, 2026-09-29), two looks: GLASS -- every surface skin at opacity 0.25 and the particles
+    # drawn inside it shown (a set named `<skin>_atoms`: exp04's MscS atoms); SOLID -- every skin opaque and those
+    # inner particles hidden. Other dot sets (ions) stay as they are. The view starts in the look its spec draws.
+    def glass_state(self):
+        return _vtk(self._glass_state)
+
+    def _glass_state(self):
+        if getattr(self, "glass", None) is None:
+            ops = [sk["actor"].GetProperty().GetOpacity() for sk in (getattr(self.lm, "_skins", None) or [])
+                   if isinstance(sk, dict) and sk.get("kind") == "surface" and sk.get("actor") is not None]
+            self.glass = bool(ops) and min(ops) < 0.9
+        return self.glass
+
+    def set_glass(self, on: bool):
+        return _vtk(self._set_glass, bool(on))
+
+    def _set_glass(self, on: bool):
+        lm = self.lm
+        if lm is None:
+            return
+        # A PLAIN-COLOURED DOT SET KEEPS NO ACTOR in its skin entry (live_movie adds the mesh and drops what add_mesh
+        # returns), so its actor is found by its own point data: the renderer actor whose mapper reads that polydata.
+        by_input = {}
+        for a in lm.p.renderer.GetActors():
+            m = a.GetMapper()
+            d = m.GetInput() if m is not None else None
+            if d is not None:
+                by_input[d.GetAddressAsString("vtkObject")] = a
+        for sk in getattr(lm, "_skins", None) or []:
+            if not isinstance(sk, dict):
+                continue
+            act = sk.get("actor")
+            if act is None and sk.get("surf") is not None:
+                act = by_input.get(sk["surf"].GetAddressAsString("vtkObject"))
+            if act is None:
+                continue
+            if sk.get("kind") == "surface":
+                act.GetProperty().SetOpacity(0.25 if on else 1.0)
+            elif str(sk.get("name", "")).endswith("_atoms"):
+                act.SetVisibility(bool(on))
+        self.glass = on
+        lm._glass_on = on                                           # the per-cell bodies (the isosurface look) read it when drawn
+        for nm, a in list(self.p.renderer.actors.items()):
+            if str(nm) == "contour_bodies":
+                a.GetProperty().SetOpacity(0.3 if on else 1.0)
+
+    # THE SAME DOTS / SURFACE BUTTON FOR A SCENE OF SKINS (Cedric, 2026-10-31: "make the 4D pane of exp29 the default, modify the 4D pane of exp02 accordingly"). An MPM point cloud has a
+    # contour behind its dots / surface toggle (`set_look`); a scene of compartment sets (exp02's proteins, exp04's membrane) has its surface skins instead: DOTS hides the skins and shows
+    # every compartment's points, SURFACE draws the skins again in the glass or solid look the glass button leaves them in. `self.look` stays None for such a scene: the contour and
+    # dot-overlay code that reads it belongs to a point cloud.
+    def has_skin_look(self) -> bool:
+        return getattr(self, "_iso_s", None) is None and any(
+            isinstance(sk, dict) and sk.get("kind") == "surface" for sk in (getattr(self.lm, "_skins", None) or []))
+
+    def set_skin_look(self, look: str):
+        return _vtk(self._set_skin_look, look)
+
+    def _set_skin_look(self, look: str):
+        lm = self.lm
+        if lm is None or not self.has_skin_look():
+            return
+        surface = str(look).lower() in ("iso", "isosurface", "surface", "contour")
+        keep = bool(self._glass_state())
+        self._set_glass(True if not surface else keep)             # the points inside a skin show whenever the skins are not drawn
+        self.glass = keep; lm._glass_on = keep                     # the glass button's own state is remembered, not the dots look's
+        by_input = {}
+        for a in lm.p.renderer.GetActors():
+            m = a.GetMapper()
+            d = m.GetInput() if m is not None else None
+            if d is not None:
+                by_input[d.GetAddressAsString("vtkObject")] = a
+        for sk in getattr(lm, "_skins", None) or []:
+            if isinstance(sk, dict) and sk.get("kind") == "surface":
+                act = sk.get("actor")
+                if act is None and sk.get("surf") is not None:
+                    act = by_input.get(sk["surf"].GetAddressAsString("vtkObject"))
+                if act is not None:
+                    act.SetVisibility(surface)
+        self._skin_dots_toggle(not surface)
+        self.skin_look = "iso" if surface else "dots"
+
+    def set_dot(self, factor: float, redraw: bool = True):
+        return _vtk(self._set_dot, factor, redraw)
+
+    def _set_dot(self, factor: float, redraw: bool = True):
+        """THE DOT SIZE, x the view's own (half the point spacing, never under 1.8 px): three buttons on the page
+        (Cedric, 2026-10-27: "after the dots button three icons to choose dot size")."""
+        factor = max(0.2, float(factor))
+        if abs(factor - float(getattr(self, "dot_factor", 1.0))) < 1e-9:
+            return
+        self.dot_factor = factor
+        with LOCK:
+            for sk in (getattr(self.lm, "_skins", None) or []):        # a scene of compartment sets: every compartment's dots
+                if not isinstance(sk, dict):
+                    continue
+                for key in ("pt_actor", "dots_actor"):
+                    a = sk.get(key)
+                    if a is not None:
+                        a.GetProperty().SetPointSize(float(sk.get("pt_base", 2.5)) * factor)
+        # THE SUBJECT CLOUD'S OVERLAY IS NOT FOR A COMPARTMENT SCENE: `_dots_update` draws the one largest set, one random colour per
+        # body (on exp02 the 138 nuclear-envelope patches, and nothing else); the compartments' own dots, in the spec's colours, are
+        # the dots look there.
+        if redraw and getattr(self, "look", None) in (None, "dots") and not self._compartment_scene():
+            with LOCK:
+                self._dots_update()
+
+    def _compartment_scene(self) -> bool:
+        lm = self.lm
+        st = (lm.style or {}) if lm is not None else {}
+        return (lm is not None and getattr(self, "look", None) is None and str(st.get("render_3d", "")).lower() == "compartments"
+                and bool(getattr(lm, "_skins", None)))
+
+    def _skin_dots_toggle(self, show: bool):
+        """The dots look of a scene whose organelles are surfaces: each such compartment's points, in the spec's colour and
+        opacity, drawn once on demand and shown while the skins are hidden (the dot buttons scale them)."""
+        import numpy as np
+        from matplotlib.colors import to_rgb
+        lm = self.lm
+        st = lm.style or {}
+        pal, opa = (st.get("colors") or {}), (st.get("opacity") or {})
+        for sk in (getattr(lm, "_skins", None) or []):
+            if not isinstance(sk, dict) or sk.get("kind") != "surface" or sk.get("sel") is None or not sk.get("set"):
+                continue
+            if sk.get("dots_actor") is None:
+                if not show or sk["set"] not in self.H.levels:
+                    continue
+                X = np.asarray(self.H.level(sk["set"]).get("pos").detach().cpu().numpy(), np.float32)
+                pd = lm.pv.PolyData(X[np.asarray(sk["sel"])])
+                col = to_rgb(tuple(pal[sk["name"]])) if sk["name"] in pal else (0.8, 0.8, 0.8)
+                sk["pt_base"] = float(sk.get("pt_base") or ((st.get("surface") or {}).get(sk["name"]) or {}).get("point_size") or 2.5)
+                sk["dots_actor"] = self.p.add_mesh(pd, color=col, opacity=float(opa.get(sk["name"], 1.0)),
+                                                   render_points_as_spheres=True, show_scalar_bar=False,
+                                                   point_size=sk["pt_base"] * float(getattr(self, "dot_factor", 1.0)),
+                                                   render=False)
+            sk["dots_actor"].SetVisibility(bool(show))
+
+    def set_iso(self, factor: float, redraw: bool = True):
+        return _vtk(self._set_iso, factor, redraw)
+
+    def _set_iso(self, factor: float, redraw: bool = True):
+        """THE SURFACE THRESHOLD, as a factor of the spec's own (Cedric, 2026-10-27: three buttons for three thresholds).
+        The contour sits where the smoothed point density crosses `iso_frac` x its mean over occupied voxels
+        (morph.reconstruct_contour, live_movie.body_contours); a factor below 1 loosens it (a fuller body, a thin sheet
+        kept), above 1 tightens it (only the dense core). The spec's value is remembered once, so the factors do not
+        compound."""
+        if getattr(self, "_iso_s", None) is None:
+            return
+        if getattr(self, "_iso_frac0", None) is None:
+            self._iso_frac0 = float(self._iso_s.get("iso_frac", 0.3))
+            c0 = getattr(self, "_iso_cfg0", None)
+            self._iso_cfg_frac0 = float(c0.get("iso_frac", 0.35)) if isinstance(c0, dict) else None
+        factor = max(0.05, float(factor))
+        if abs(factor - float(getattr(self, "iso_factor", 1.0))) < 1e-9:
+            return
+        self.iso_factor = factor
+        with LOCK:
+            self._iso_s["iso_frac"] = self._iso_frac0 * factor
+            if isinstance(getattr(self, "_iso_cfg0", None), dict) and self._iso_cfg_frac0 is not None:
+                self._iso_cfg0["iso_frac"] = self._iso_cfg_frac0 * factor
+            if redraw and getattr(self, "look", None) == "iso":
+                self._recut_iso()
+
+    def _recut_iso(self):
+        """The isosurface bodies are contoured per frame and cut by the view, so a slice is re-made when it is switched or the
+        view turns (the dots and skins are re-cut by `near_side_refresh`)."""
+        lm = self.lm
+        if lm is None or getattr(self, "look", None) != "iso" or getattr(lm, "_contour_s", None) is None:
+            return
+        self._iso_grid()
+        lm._contour_update(self.H, self.H.level(lm._sname), lm.cloud.points)
+        self._flat_iso()
+
+    # THE SLAB (the human, 2026-10-18): in a scene of cells "a slice is a truncation with a rectangular volume" -- the points
+    # within `slab_frac` x the scene's radius of the centre plane normal to the up axis, fixed in the world: a sphere becomes a
+    # thick disc, whose face shows from above and whose rectangle shows from the side. A scene without per-cell bodies keeps the
+    # view's near-half cut below.
+    slab_frac = 0.2
+
+    def set_slab(self, frac: float):
+        return _vtk(self._set_slab, float(frac))
+
+    def _set_slab(self, frac: float):
+        with LOCK:
+            self.slab_frac = max(0.03, min(1.5, float(frac)))
+            if getattr(self, "cut", False) and self._is_cells():
+                self._make_slab()
+                self._apply_slab()
+
+    def _is_cells(self):
+        return self.lm is not None and bool(getattr(self.lm, "_contour_bodies", None))
+
+    def _make_slab(self):
+        P, m = self._live_points()
+        if P is None or not m.any():
+            self.lm._slab = None
+            return
+        X = P[m]
+        ctr = np.median(X, axis=0)
+        R = float(np.percentile(np.linalg.norm(X - ctr, axis=1), 98))
+        nrm = np.zeros(3); nrm[self.up_axis] = 1.0
+        self.lm._slab = (nrm, ctr, float(self.slab_frac) * R)
+
+    def _apply_slab(self):
+        if getattr(self, "look", None) == "dots":
+            self._dots_update()
+        else:
+            self._recut_iso()
+
+    def _set_cut(self, on: bool):
+        lm = self.lm
+        if lm is None:
+            return
+        if self._is_cells():                                         # cells: the slab, not the view's near half
+            self.cut = on
+            if on:
+                self._make_slab()
+            else:
+                lm._slab = None
+            self._apply_slab()
+            return
+        st = lm.style if lm.style is not None else {}
+        if not hasattr(self, "_cut_saved"):
+            self._cut_saved = {k: st.get(k) for k in ("near_side", "near_side_centre")}
+        if on:
+            st["near_side"] = "far"
+            st["near_side_centre"] = [float(v) for v in self.focal]
+        else:
+            for k, v in self._cut_saved.items():
+                if v is None:
+                    st.pop(k, None)
+                else:
+                    st[k] = v
+        lm.style = st
+        lm._slice_all = on                                          # every surface, whatever its own setting
+        self.cut = on
+        lm.near_side_refresh()
+        self._recut_iso()
+
+    def _set_camera(self, azim=None, elev=None, zoom=None, roll=None):
+        if self.panel is not None:
+            return
+        with LOCK:
+            if azim is not None: self.azim = float(azim)
+            if elev is not None: self.elev = max(-89.0, min(89.0, float(elev)))
+            if zoom is not None: self.zoom = max(0.05, min(60.0, float(zoom)))
+            # ROLL, BECAUSE WHICH END IS UP IS A VIEW CHOICE AND NOTHING ELSE.
+            #
+            # The orbit is built around `up_axis` with the up vector +axis, and `elev` is clamped
+            # to +-89 deg, so there is no way to get from it to a picture of an animal whose long
+            # axis runs the other way -- the Platynereis region has its head at LOW z and its tail
+            # at high z, so z-up draws the larva upside down against every figure in its own
+            # paper. Rolling 180 deg turns the picture over. It is deliberately NOT a flipped
+            # `up_axis`: the up axis also decides where the floor is drawn and which way the scale
+            # bar is lifted, and a scene lit and floored for one up vector and photographed from
+            # the other is a worse picture than an upside-down one.
+            if roll is not None: self.roll = float(roll)
+            a, e = np.radians(self.azim), np.radians(self.elev)
+            # the orbit is about the spec's `up_axis`: elevation climbs along it, azimuth turns around it
+            up = self.up_axis
+            h = [i for i in range(3) if i != up]
+            d = np.zeros(3); d[h[0]] = np.cos(e) * np.cos(a); d[h[1]] = np.cos(e) * np.sin(a); d[up] = np.sin(e)
+            U = np.zeros(3); U[up] = 1.0
+            cam = self.p.camera
+            cam.focal_point = tuple(self.focal)
+            # under a parallel projection the distance does not change the picture, so the camera
+            # stays far away and only the parallel scale zooms: the near plane never cuts the scene
+            par = bool(cam.parallel_projection)
+            cam.position = tuple(self.focal + d * (self.dist0 if par else self.dist0 / self.zoom))
+            cam.up = tuple(U)
+            _roll = float(getattr(self, "roll", 0.0) or 0.0)
+            if _roll:
+                # `camera.roll` is a pyvista PROPERTY, not VTK's `Roll()` method -- calling it
+                # raises TypeError, which the shot route swallowed into a reply with no `path`.
+                cam.roll = cam.roll + _roll
+            # THE MOVIE'S CAMERA IS ORTHOGRAPHIC (`parallel_projection`, live_movie.py:547), so
+            # zoom is the parallel scale (half the view height in world units), not the distance.
+            if bool(cam.parallel_projection):
+                cam.parallel_scale = self.scale0 / self.zoom
+            self.p.renderer.ResetCameraClippingRange()
+            self._scale_bar(cam, d)
+            self._section_zoom()
+            # `near_side` CUTS BY THE VIEW, so the cut has to be re-made when the view turns --
+            # the surfaces as well as the pieces.
+            if self.lm is not None and hasattr(self.lm, "near_side_refresh"):
+                self.lm.near_side_refresh()
+            if getattr(self, "look", None) == "dots":
+                self._dots_update()                              # dot size follows the zoom, the slice the view
+
+    # THE LOOK: DOTS OR THE ISOSURFACE (Cedric, 2026-10-13). A spec drawn as a contour (`render_3d: contour`, exp21,
+    # exp23, exp25) re-contours its live points on every frame the slider asks for, on a voxel grid over the points'
+    # whole extent: exp25_grow2's last frame (88,491 live points spread over 34 x 48 x 44 world units, voxel 0.067)
+    # is 230 M voxels, and the render did not come back within 5 min (16 GB resident) while the page showed an empty
+    # black panel. The 3-D view therefore opens on the LIVE POINTS as dots, coloured per cell as the movie colours
+    # its bodies, and the spec's own isosurface is one button away -- on a grid coarsened to at most `ISO_VOXELS`
+    # voxels over the frame's extent, so its cost is bounded too. Specs that draw dots already have no toggle. The
+    # watcher asks for the look (`set_look`); until something does, `look` is None and the view draws what the spec
+    # draws, so the studio page's picture is unchanged.
+    DOTS = "view_dots"
+    # THE FLAT-INK LOOK (Cedric, 2026-10-13: the lit sphere dots "look really metallic, could we have more of a bio
+    # look"): flat unlit fills from a vivid set, one colour
+    # per cell id kept across frames, and thin ink outlines drawn from the depth buffer (`_ink`); the pieces live in
+    # gui/flat_ink.py, shared with the record movies. `palette = "movie"` puts back the spec's own
+    # `contour_bodies.color_by` colours.
+    palette = "vivid"
+    ISO_VOXELS = 12_000_000                                      # voxels in one isosurface frame's grid, at most
+
+    def set_look(self, look: str, redraw: bool = True):
+        return _vtk(self._set_look, look, redraw)
+
+    def _look_setup(self):
+        lm = self.lm
+        self.look = None
+        self._iso_s = getattr(lm, "_contour_s", None) if lm is not None else None
+        if self._iso_s is None:
+            return
+        self._iso_dx0 = getattr(lm, "_bodies_dx", None)          # the spec's own voxel and reach, from the seed
+        self._iso_reach0 = getattr(lm, "_bodies_reach", None)
+        _cb = getattr(lm, "_contour_bodies", None)
+        self._iso_cfg0 = dict(_cb) if isinstance(_cb, dict) else None
+
+    def _set_look(self, look: str, redraw: bool = True):
+        if getattr(self, "_iso_s", None) is None:
+            return
+        look = "iso" if str(look).lower() in ("iso", "isosurface", "surface", "contour") else "dots"
+        if look == self.look:
+            return
+        lm = self.lm
+        with LOCK:
+                lm.style["render_3d"] = "contour"
+                try:
+                    ok = lm._contour_build(self.H, self.H.level(lm._sname), lm.cloud.points)
+                except Exception as _e:                          # noqa: BLE001
+                    print(f"[view] deferred contour failed ({type(_e).__name__}: {_e})", flush=True); ok = False
+                if not ok or getattr(lm, "_contour_s", None) is None:
+                    self._iso_s = None
+                    return
+                self._iso_s = lm._contour_s
+                if self.palette == "vivid":                      # as the first switch did when the contour was built at open:
+                    try:                                         # the contour's screen-space occlusion speckles flat fills
+                        self.p.disable_ssao()
+                    except Exception:                            # noqa: BLE001
+                        pass
+                self._iso_dx0 = getattr(lm, "_bodies_dx", None); self._iso_reach0 = getattr(lm, "_bodies_reach", None)
+                _cb = getattr(lm, "_contour_bodies", None); self._iso_cfg0 = dict(_cb) if isinstance(_cb, dict) else None
+                for nm, a in list(self.p.renderer.actors.items()):
+                    if str(nm).startswith("contour"):
+                        a.SetVisibility(False)
+        with LOCK:
+            if self.look is None:
+                self._frame_live()                               # from now on every frame is framed on its points
+                if self.palette == "vivid":
+                    try:                                         # the contour's ambient occlusion shades flat fills
+                        self.p.disable_ssao()
+                    except Exception:                            # noqa: BLE001
+                        pass
+            self.look = look
+            if look == "dots":
+                lm._contour_s = None                             # the renderer skips the contour while this is None
+                for nm, a in list(self.p.renderer.actors.items()):
+                    if str(nm).startswith("contour"):
+                        a.SetVisibility(False)
+                self._set_camera()                               # draws the dots
+                return
+            lm._contour_s = self._iso_s
+            try:
+                self.p.remove_actor(self.DOTS, render=False)
+            except Exception:                                    # noqa: BLE001
+                pass
+            if redraw:                                           # else the frame about to be shown draws it
+                self._iso_grid()
+                lm._contour_update(self.H, self.H.level(lm._sname), lm.cloud.points)
+                self._flat_iso()
+
+    def _live_points(self):
+        """(every position of the drawn set [N, 3], live mask [N]) -- live = `occ` > 0.5 and finite -- or (None, None)."""
+        lm = self.lm
+        name = getattr(lm, "_sname", None) if lm is not None else None
+        if not name or name not in self.H.levels:
+            return None, None
+        lvl = self.H.level(name)
+        P = lvl.get("pos").detach().cpu().numpy().astype(np.float64)
+        if P.shape[1] == 2:
+            P = np.concatenate([P, np.zeros((P.shape[0], 1))], 1)
+        occ = getattr(lvl, "occ", None)
+        m = (occ.detach().cpu().numpy() > 0.5) if occ is not None and occ.numel() == P.shape[0] \
+            else np.ones(P.shape[0], bool)
+        m &= np.isfinite(P).all(1) & (np.abs(P).max(1) < 1e5)  # parked slots sit at -1e6
+        return P, m
+
+    def _frame_live(self):
+        """FRAME THE LIVE POINTS OF THIS FRAME, as `__init__` frames the seed: a dormant pool (exp25's 126,000 slots
+        resting near the origin, 10 units from the one live cell) pulled the seed's framing off the cell, and a run
+        that spreads from 3 to 48 units across left the late frames outside the view."""
+        if getattr(self, "fixed_frame", False):                   # the box is the frame, once
+            return
+        P, m = self._live_points()
+        if P is None or not m.any():
+            return
+        P = P[m]
+        cam = self.p.camera
+        lo, hi = P.min(0), P.max(0)
+        self.focal = 0.5 * (lo + hi) + np.asarray(getattr(self.lm, "_shift", 0.0) or 0.0, float)
+        R = 0.5 * float(np.linalg.norm(hi - lo))
+        if R > 0:
+            self.dist0 = 1.15 * R / np.tan(np.radians(float(cam.view_angle) / 2.0))
+            self.scale0 = 1.15 * R
+
+    def _iso_grid(self):
+        """The contour's voxel side for this frame: the spec's own, or coarser so the frame's grid holds at most
+        `ISO_VOXELS` voxels; the reach (how far from a point a voxel still belongs to its cell) never under a voxel,
+        and the blur (`sigma`, in voxels) shrunk by the same factor so it stays the spec's width in world units -- at
+        the spec's 2 voxels on a 3.4x coarser grid exp25_grow2's thin late cells blurred under the iso level and
+        only two specks of 34 cells were drawn."""
+        lm = self.lm
+        dx0, r0 = getattr(self, "_iso_dx0", None), getattr(self, "_iso_reach0", None)
+        if dx0 is None or r0 is None:
+            return
+        P, m = self._live_points()
+        if P is None or not m.any():
+            return
+        ext = P[m].max(0) - P[m].min(0) + 4.0 * r0
+        dx = max(float(dx0), float(np.prod(np.maximum(ext, 1e-9)) / self.ISO_VOXELS) ** (1.0 / 3.0))
+        lm._bodies_dx, lm._bodies_reach = dx, max(float(r0), dx)
+        c0 = getattr(self, "_iso_cfg0", None)
+        if c0 is not None:
+            lm._contour_bodies = {**c0, "sigma": float(c0.get("sigma", 0.8)) * float(dx0) / dx}
+
+    def _dots_rgb(self, lvl, m):
+        """A colour per live point, BY ITS CELL: the movie's own body colour when the spec gives one
+        (`contour_bodies.color_by`: the cell's block through its colormap, e.g. exp25's points per cell on YlOrBr),
+        else YlOrBr at a fixed per-cell position; each cell then shaded by its own factor in [0.85, 1.0] so two
+        touching cells of one colour still separate."""
+        import matplotlib.pyplot as plt
+        st = (self.lm.style or {}) if self.lm is not None else {}
+        cfg = st.get("contour_bodies") or {}
+        cfg = cfg if isinstance(cfg, dict) else {"block": str(cfg)}
+        N = int(m.shape[0])
+        lab = None
+        blk = str(cfg.get("block", "pid"))
+        try:
+            if blk in lvl.state_schema:
+                lab = lvl.get(blk).detach().cpu().numpy().reshape(N, -1)[:, 0]
+        except Exception:                                        # noqa: BLE001
+            lab = None
+        par = getattr(lvl, "parent", None)
+        if lab is None and par is not None and par.numel() == N:
+            lab = par.detach().cpu().numpy()
+        lab = np.zeros(N, np.int64) if lab is None else np.rint(np.asarray(lab, np.float64)).astype(np.int64)
+        lab = lab[m]
+        frac = (lab * 0.6180339887) % 1.0                        # a fixed number in [0, 1) per cell id
+        # THE SPEC'S OWN TYPE COLOURS WIN (Cedric, 2026-10-27, exp01 minisite: "dot in 3D does not have the right
+        # color" -- once the view had a look, a two-hue point cloud came out in the vivid per-cell palette). When
+        # `plotting.colors` names every type of the points' typed set (their own, else their parent's), each point
+        # takes its type's colour, exactly as the movie draws it (live_movie._rgb).
+        cols = st.get("colors") or {}
+        if isinstance(cols, dict) and cols:
+            try:
+                plv = lvl if getattr(lvl, "type_names", None) else \
+                    self.H.level(getattr(lvl, "parent_name", None) or cfg.get("cell_set", "cell"))
+                names = list(getattr(plv, "type_names", []) or [])
+                nt = getattr(plv, "node_type", None)
+                if names and nt is not None and all(n in cols for n in names):
+                    from matplotlib.colors import to_rgb
+                    tab = np.asarray([to_rgb(tuple(cols[n]) if isinstance(cols[n], (list, tuple)) else cols[n])
+                                      for n in names], np.float64)
+                    nt_np = nt.detach().cpu().numpy().astype(np.int64)
+                    ti = nt_np[np.clip(lab, 0, nt_np.shape[0] - 1)] if plv is not lvl else nt_np[m]
+                    return tab[np.clip(ti, 0, len(names) - 1)]
+            except Exception as _e:                              # noqa: BLE001
+                print(f"[view] spec colours not applied ({type(_e).__name__}: {_e})", flush=True)
+        if self.palette == "vivid":
+            from plexus.gui import flat_ink
+            return flat_ink.palette(lab)
+        cb = cfg.get("color_by") or None
+        c = None
+        if cb:
+            try:
+                plv = self.H.level(getattr(lvl, "parent_name", None) or cfg.get("cell_set", "cell"))
+                v = plv.get(str(cb.get("block", "chem"))).detach().cpu().numpy().astype(np.float64)
+                v = v.reshape(v.shape[0], -1)[:, int(cb.get("channel", 0))]
+                lo, hi = (cb.get("range") or [float(np.nanmin(v)), float(np.nanmax(v)) + 1e-12])
+                x = np.clip((v[np.clip(lab, 0, v.shape[0] - 1)] - lo) / max(float(hi) - float(lo), 1e-12), 0.0, 1.0)
+                fl = float(cb.get("floor", 0.25))
+                c = np.asarray(plt.get_cmap(str(cb.get("cmap", "YlOrBr")))(fl + (1.0 - fl) * x))[:, :3]
+            except Exception:                                    # noqa: BLE001
+                c = None
+        if c is None:
+            c = np.asarray(plt.get_cmap("YlOrBr")(0.3 + 0.6 * frac))[:, :3]
+        return c * (0.85 + 0.15 * frac)[:, None]
+
+    DEFORM_K = 40                       # nearest neighbours of each point searched in the first kept frame, the same-cell ones kept
+    DEFORM_REACH = 6.0                  # ... within this many median nearest-neighbour distances (a random cloud has far fewer within 2.2: 7 same-cell neighbours, and 27% of the points no fit)
+    DEFORM_MAX_POINTS = 1_500_000       # above this many live points the strain is not computed (memory, seconds)
+
+    def set_deform(self, on, redraw: bool = True):
+        return _vtk(self._set_deform, on, redraw)
+
+    def _set_deform(self, on, redraw: bool = True):
+        """DOTS COLOURED BY |F|, the size of the deformation gradient (blue-white-red), instead of by cell: the page's flame button, between the slice and the dots / surface buttons."""
+        on = bool(on)
+        if on == bool(getattr(self, "deform_on", False)):
+            return
+        self.deform_on = on
+        if redraw and getattr(self, "look", None) in (None, "dots") and not self._compartment_scene():
+            with LOCK:
+                self._dots_update()
+
+    def _deform_fnorm(self, name, P):
+        """(|F| [N], its value at rest, why not): the Frobenius norm of each point's deformation gradient F at the positions `P` now shown, against the FIRST KEPT FRAME.
+
+        The colouring of the first implementation (MPM_pytorch `graph_data_generator`: `torch.norm(F.view(n, -1), dim=1)`, coolwarm). A trajectory stores positions only,
+        not F, so F is fitted per point from its neighbours: with dX the offsets to the (up to 40, same-cell, within 6 nearest spacings) neighbours in the first
+        frame and dx the same offsets now, F = (sum dx dX^T)(sum dX dX^T)^-1. |F| is rotation-free and equals sqrt(D) (D = 2 or 3 dimensions) at rest. For an
+        elastic material F is exactly what the solver holds; for a viscoelastic one the solver's F has relaxed and this is the total deformation.
+        The neighbours, their offsets and the inverse of the fit matrix are found once per scene."""
+        snaps = self.snaps
+        if len(snaps) < 2 or name not in snaps[0] or "pos" not in snaps[0][name]:
+            return None, 0.0, "deformation: no recorded frames to measure against"
+        e0 = snaps[0][name]
+        X0 = e0["pos"].detach().cpu().numpy().astype(np.float32)
+        if X0.shape[1] == 2:
+            X0 = np.concatenate([X0, np.zeros((len(X0), 1), np.float32)], 1)
+        N = X0.shape[0]
+        if P.shape[0] != N:
+            return None, 0.0, "deformation: the point count changed since the first frame"
+        key = (N, id(snaps))
+        ref = getattr(self, "_deform_ref", None)
+        if ref is None or ref["key"] != key:
+            from scipy.spatial import cKDTree
+            live = np.isfinite(X0).all(1) & (np.abs(X0).max(1) < 1e5)
+            if e0.get("occ") is not None:
+                live &= e0["occ"].detach().cpu().numpy() > 0.5
+            li = np.flatnonzero(live)
+            if len(li) > self.DEFORM_MAX_POINTS:
+                return None, 0.0, f"deformation: {len(li):,} points is too many to measure"
+            par = e0.get("parent")
+            par = par.detach().cpu().numpy() if par is not None else np.zeros(N, np.int64)
+            Xl, pl = X0[li], par[li]
+            d, nb = cKDTree(Xl).query(Xl, k=self.DEFORM_K + 1, workers=-1)
+            d, nb = d[:, 1:], nb[:, 1:]
+            sp = float(np.median(d[:, 0]))
+            w = (pl[nb] == pl[:, None]) & (d < self.DEFORM_REACH * sp)
+            dX = ((Xl[nb] - Xl[:, None, :]) * w[..., None]).astype(np.float32)
+            M = np.einsum("nki,nkj->nij", dX, dX) + (1e-3 * sp * sp) * np.eye(3, dtype=np.float32)
+            ok = w.sum(1) >= 6
+            Minv = np.zeros_like(M)
+            Minv[ok] = np.linalg.inv(M[ok])
+            rest = float(np.sqrt(2.0 if np.ptp(Xl[:, 2]) < 1e-9 else 3.0))
+            ref = self._deform_ref = {"key": key, "li": li, "nb": nb.astype(np.int32), "w": w, "dX": dX, "Minv": Minv, "ok": ok, "rest": rest}
+        li, ok = ref["li"], ref["ok"]
+        sig = (N, round(float(P[::997].sum()), 6))                    # which frame this is: a camera drag redraws one frame many times and the fit takes ~1 s
+        cache = self.__dict__.setdefault("_deform_cache", {})
+        if sig in cache and cache[sig][0] is ref:
+            return cache[sig][1], ref["rest"], ""
+        x = P[li].astype(np.float32)
+        dx = (x[ref["nb"]] - x[:, None, :]) * ref["w"][..., None]
+        F = np.einsum("nki,nkj->nij", dx, ref["dX"]) @ ref["Minv"]
+        fn = np.sqrt((F * F).sum((1, 2)))
+        fn[~ok | ~np.isfinite(fn)] = ref["rest"]                      # no fit (too few same-cell neighbours): drawn as undeformed
+        out = np.full(N, ref["rest"], np.float32)
+        out[li] = fn
+        if len(cache) >= 4:
+            cache.pop(next(iter(cache)))
+        cache[sig] = (ref, out)
+        return out, ref["rest"], ""
+
+    def _deform_range(self, name):
+        """(lo, hi) of the colour scale, one pair for every frame of the scene so the frames compare: the 5th and 95th percentiles of |F| pooled over every live
+        point of 12 kept frames spread through the run, each pulled to the side of the undeformed value it lies on (lo <= rest - 0.01 <= rest + 0.01 <= hi).
+        The first version took the 99th percentile of | |F| - rest | and a few extreme points stretched the scale until a whole body drew white (exp01 step 7)."""
+        key = id(self.snaps)
+        got = getattr(self, "_deform_top", None)
+        if got is not None and got[0] == key:
+            return got[1]
+        vals, rest = [], 0.0
+        for i in sorted({int(round(k)) for k in np.linspace(1, len(self.snaps) - 1, 12)}):
+            P = self.snaps[i][name]["pos"].detach().cpu().numpy().astype(np.float64)
+            if P.shape[1] == 2:
+                P = np.concatenate([P, np.zeros((len(P), 1))], 1)
+            fn, rest, _ = self._deform_fnorm(name, P)
+            if fn is not None:
+                vals.append(fn[self._deform_ref["li"]])
+        p = np.percentile(np.concatenate(vals), [1, 5, 50, 95, 99]) if vals else np.full(5, rest)
+        lo, hi = min(float(p[1]), rest - 0.01), max(float(p[3]), rest + 0.01)
+        print(f"[view] |F| over {len(vals)} frames: percentiles 1/5/50/95/99 = " + " / ".join(f"{x:.3f}" for x in p) + f"; undeformed {rest:.3f}; scale {lo:.3f} .. {hi:.3f}", flush=True)
+        self._deform_top = (key, (lo, hi))
+        return lo, hi
+
+    def _dots_update(self):
+        """The live points of the drawn set as round lit dots (below), nearer points brighter (0.75 to 1.0 of their
+        colour) for depth, and the near half hidden while the slice is on."""
+        import pyvista as pv
+        from plexus.gui import flat_ink
+        from scipy.spatial import cKDTree
+        P, m = self._live_points()
+        if P is None or not m.any():
+            try:
+                self.p.remove_actor(self.DOTS, render=False)
+            except Exception:                                    # noqa: BLE001
+                pass
+            return
+        lvl = self.H.level(self.lm._sname)
+        rgb = self._dots_rgb(lvl, m)
+        note, flat = "", False
+        if getattr(self, "deform_on", False):                   # the flame button: |F| through red-white-blue (coolwarm reversed: red = compressed, blue = stretched), the cell colours when it cannot be measured
+            fn, rest, note = self._deform_fnorm(self.lm._sname, P)
+            if fn is not None:
+                import matplotlib
+                lo, hi = self._deform_range(self.lm._sname)
+                v = fn[m]
+                t = np.where(v >= rest, 0.5 + 0.5 * (v - rest) / (hi - rest), 0.5 - 0.5 * (rest - v) / (rest - lo))   # white at the undeformed value, the percentiles at the ends
+                rgb, flat = np.asarray(matplotlib.colormaps["coolwarm_r"](np.clip(t, 0.0, 1.0)))[:, :3], True
+                note = (f"|F|, Frobenius norm of the deformation gradient, against the first frame\n"
+                        f"red {lo:.2f} (5th percentile)   white {rest:.2f} (undeformed)   blue {hi:.2f} (95th percentile)")
+        X = P[m]
+        cam = self.p.camera
+        n = np.asarray(cam.position, float) - np.asarray(cam.focal_point, float)
+        n /= max(float(np.linalg.norm(n)), 1e-12)
+        d = (X - self.focal) @ n                                 # toward the camera > 0
+        if getattr(self, "cut", False):
+            sl = getattr(self.lm, "_slab", None)
+            keep = (np.abs((X - np.asarray(sl[1], float)) @ np.asarray(sl[0], float)) <= float(sl[2])) if sl is not None else (d <= 0.0)
+            X, rgb, d = X[keep], rgb[keep], d[keep]
+        if len(X) and not flat:
+            span = float(d.max() - d.min()) or 1.0
+            if self.palette == "vivid":
+                # ATMOSPHERIC, NOT DARKER: the farthest dots mixed 30 % toward the background
+                bg = np.asarray(self.p.renderer.GetBackground(), float)[:3]
+                a = 0.3 * ((d.max() - d) / span)[:, None]
+                rgb = rgb * (1.0 - a) + bg[None, :] * a
+            else:
+                rgb = rgb * (0.75 + 0.25 * (d - d.min()) / span)[:, None]
+        sub = X[:: max(1, len(X) // 20000)]
+        sp = float(np.median(cKDTree(sub).query(sub, k=2)[0][:, 1])) if len(sub) > 2 else 0.1
+        sp *= (len(X) / max(len(sub), 1)) ** (-1.0 / 3.0) if len(sub) < len(X) else 1.0
+        cloud = pv.PolyData(np.ascontiguousarray(X, np.float32))
+        cloud["rgb"] = (np.clip(rgb, 0.0, 1.0) * 255).astype(np.uint8)
+        # ROUND FLAT DOTS OF A WORLD RADIUS (Cedric, 2026-10-13): VTK's plain GL points are squares, which tiled a dense
+        # cell into a carpet ("did you use the block instead of dots"), and the lit sphere splats that replaced them
+        # read as metal. Sphere sprites with the lighting off are flat discs of one colour that still write a sphere's
+        # depth, which is what `_ink` outlines them from. Radius half the median spacing, so neighbours just touch
+        # (at 0.38 a lattice seen along its rows showed the background between every two rows, and the ink turned
+        # those gaps into stripes), never under 1.8 px (exp25_grow2's last frame: 48 units across, points 0.1 apart).
+        half_h = float(cam.parallel_scale) if cam.parallel_projection \
+            else float(self.dist0 / self.zoom) * np.tan(np.radians(float(cam.view_angle) / 2))
+        wpp = 2.0 * half_h / float(self.p.window_size[1])        # world units per pixel
+        r = max(0.5 * sp, 1.8 * wpp) * float(getattr(self, "dot_factor", 1.0))   # x the page's dot-size choice
+        self._dot_r = r
+        self.p.add_mesh(cloud, name=self.DOTS, scalars="rgb", rgb=True, style="points", point_size=2.0 * r / wpp,
+                        render_points_as_spheres=True, lighting=False, ambient=1.0, diffuse=0.0, specular=0.0,
+                        show_scalar_bar=False, reset_camera=False)   # shading is flat_ink.shade's, from the depth
+        try:
+            self.p.remove_actor("deform_label", render=False)
+        except Exception:                                        # noqa: BLE001
+            pass
+        if note:
+            self.p.add_text(note, position=(0.012, 0.012), viewport=True, font_size=10,
+                            color=str(getattr(self.lm, "_fg", "white") or "white"), name="deform_label")
+
+    def _type_rgb_of_bodies(self, bodies):
+        """[n, 3] RGB in 0-1 for body (cell) ids, from `plotting.colors` when it names every type of the cell set, else None (the vivid per-cell palette then applies)."""
+        st = (self.lm.style or {}) if self.lm is not None else {}
+        cols = st.get("colors") or {}
+        if not (isinstance(cols, dict) and cols):
+            return None
+        try:
+            cfg = st.get("contour_bodies") or {}
+            plv = self.H.level((cfg if isinstance(cfg, dict) else {}).get("cell_set", "cell"))
+            names = list(getattr(plv, "type_names", []) or [])
+            nt = getattr(plv, "node_type", None)
+            if not names or nt is None or not all(n in cols for n in names):
+                return None
+            from matplotlib.colors import to_rgb
+            tab = np.asarray([to_rgb(tuple(cols[n]) if isinstance(cols[n], (list, tuple)) else cols[n]) for n in names], np.float64)
+            nt_np = nt.detach().cpu().numpy().astype(np.int64)
+            b = np.clip(np.rint(np.asarray(bodies, np.float64)).astype(np.int64), 0, nt_np.shape[0] - 1)
+            return tab[np.clip(nt_np[b], 0, len(names) - 1)]
+        except Exception as _e:                                          # noqa: BLE001
+            print(f"[view] spec colours not applied to the surface ({type(_e).__name__}: {_e})", flush=True)
+            return None
+
+    def _flat_iso(self):
+        """The isosurface in the flat-ink look: every `contour*` actor unlit (ambient 0.85, diffuse 0.15, specular 0, no
+        PBR metal or coat) and, with `palette = "vivid"`, each cell's surface recoloured by its `body` id."""
+        if self.palette != "vivid":
+            return
+        import pyvista as pv
+        from plexus.gui import flat_ink
+        for nm, a in list(self.p.renderer.actors.items()):
+            if not str(nm).startswith("contour") or not a.GetVisibility():
+                continue
+            prop = a.GetProperty()
+            prop.SetInterpolationToGouraud()
+            prop.SetAmbient(flat_ink.FLAT["ambient"]); prop.SetDiffuse(flat_ink.FLAT["diffuse"])
+            prop.SetSpecular(flat_ink.FLAT["specular"])
+            if not getattr(self.lm, "_glass_on", False):        # OPAQUE, unless the glass toggle asks for translucency
+                prop.SetOpacity(1.0)                             # (Cedric, 2026-10-27: the opaque, outline-free render "best so far")
+            try:
+                prop.SetMetallic(0.0); prop.SetCoatStrength(0.0)
+            except Exception:                                    # noqa: BLE001
+                pass
+            m = a.GetMapper()
+            data = pv.wrap(m.GetInput()) if m is not None and m.GetInput() is not None else None
+            if data is not None and "body" in data.point_data:
+                body = np.asarray(data.point_data["body"])
+                tc = self._type_rgb_of_bodies(body)                      # the spec's own type colours win, as they do for the dots (Cedric, 2026-10-31: "the dots have the right colours, not the surface")
+                data.point_data["rgb"] = ((tc if tc is not None else flat_ink.palette(body)) * 255).astype(np.uint8)
+                m.SetScalarModeToUsePointFieldData(); m.SelectColorArray("rgb"); m.SetColorModeToDirectScalars()
+                m.ScalarVisibilityOn()
+
+    def _ink(self, img):
+        """THE INK (gui/flat_ink.py) from the depth buffer of the frame just rendered -- no second render pass.
+        Scene pixels are those drawn within 1.6 framing radii of the focal plane: the scale bar in front of the scene
+        and the 2-D panels and text, which write no depth, are left as they are."""
+        from plexus.gui import flat_ink
+        zb = flat_ink.zbuffer(self.p.render_window)
+        if zb is None or zb.shape != img.shape[:2]:
+            return img
+        cam = self.p.camera
+        D = flat_ink.depth(zb, cam)
+        dfoc = float(np.linalg.norm(np.asarray(cam.position, float) - np.asarray(cam.focal_point, float)))
+        R = float(self.scale0) / 1.15
+        scene = (zb < 1.0 - 1e-7) & (np.abs(D - dfoc) < 1.6 * R)
+        half_h = float(cam.parallel_scale) if cam.parallel_projection \
+            else float(self.dist0 / self.zoom) * np.tan(np.radians(float(cam.view_angle) / 2))
+        wpp = 2.0 * half_h / float(img.shape[0])
+        dots = self.look == "dots"
+        return flat_ink.ink(img, D, scene, wpp, dot_r=(float(getattr(self, "_dot_r", 0.0) or 0.0) or None) if dots else None,
+                            colour_origin=(np.asarray(self.p.renderer.GetBackground(), float)[:3] * 255.0 if dots
+                                           else (0.0, 0.0, 0.0)),
+                            per_object=bool((self.sim.plotting or {}).get("ink_per_object", False)))   # each object circled, not the union
+
+    def _section_zoom(self):
+        """The section inset follows the view's zoom: its window is the declared span over the zoom,
+        centred where it was, and the section is redrawn (discs re-sized) when the zoom changed."""
+        lm = self.lm
+        if getattr(lm, "cs", None) is None or getattr(lm, "_cs_rng", None) is None:
+            return
+        if not hasattr(self, "_cs0"):
+            (x0, x1), (y0, y1) = lm._cs_rng
+            self._cs0 = (0.5 * (x0 + x1), 0.5 * (y0 + y1), float(x1 - x0), float(y1 - y0))
+            self._cs_zoom = 1.0
+        if abs(self.zoom - self._cs_zoom) < 1e-9:
+            return
+        cx, cy, sx, sy = self._cs0
+        lm._cs_rng = ([cx - 0.5 * sx / self.zoom, cx + 0.5 * sx / self.zoom],
+                      [cy - 0.5 * sy / self.zoom, cy + 0.5 * sy / self.zoom])
+        self._cs_zoom = self.zoom
+        lm._update_cross_section(self.H)
+
+    def _scale_bar(self, cam, view_dir):
+        """A bar of a round length, fixed at the bottom-left of the VIEW whatever the camera does.
+
+        The movie's bar is a line at the world box's edge, sized to a third of the box; the page
+        frames the objects and zooms, so that bar is off-screen or the wrong length here. This one
+        is a world-space line rebuilt on every camera move: it lies in the screen plane at the
+        bottom of the view, its length the shortest 1-2-2.5-5 x 10^n metres at least as wide on
+        screen as its own label, labelled in SI (µm below 1 mm). Needs `general.units` (length_um), as the movie's bar does."""
+        Lum = getattr(self.lm, "length_um", None)
+        if not Lum:
+            return
+        from plexus.live_movie import _si_length
+        import pyvista as pv
+        up = np.zeros(3); up[self.up_axis] = 1.0
+        right = np.cross(up, view_dir); right /= max(np.linalg.norm(right), 1e-12)
+        vup = np.cross(view_dir, right); vup /= max(np.linalg.norm(vup), 1e-12)
+        # THE ROLL TURNS THE SCREEN, SO IT HAS TO TURN THIS BASIS TOO.
+        #
+        # The bar is a line in WORLD space placed at the bottom-right of the view; its label is a
+        # viewport annotation pinned to the bottom-right of the WINDOW. Those agree only while the
+        # screen basis derived from `up_axis` is the screen's actual basis -- and a rolled camera
+        # breaks that. At the 180 degrees this animal is drawn with (its z runs head to tail, so
+        # z-up shows it upside down) the bar went to the TOP-LEFT and its label stayed at the
+        # bottom-right: a scale bar in one corner and the number it refers to in the other.
+        _roll = float(getattr(self, "roll", 0.0) or 0.0)
+        if _roll:
+            _c, _s = np.cos(np.radians(_roll)), np.sin(np.radians(_roll))
+            right, vup = _c * right + _s * vup, -_s * right + _c * vup
+        half_h = float(cam.parallel_scale) if cam.parallel_projection else float(self.dist0 / self.zoom) * np.tan(np.radians(float(cam.view_angle) / 2))
+        W, Hh = self.p.window_size
+        half_w = half_h * float(W) / float(Hh)
+        m_per_unit = float(Lum) / 1.0e6
+        # THE BAR AS WIDE AS ITS LABEL (flat_ink.round_length): the shortest round length in metres whose bar is at
+        # least as wide as its own label (`_label_px`) -- 250 µm, not 1 mm, in exp25's view; re-chosen on every camera
+        # move, so it follows the zoom
+        from plexus.gui import flat_ink
+        px_per_m = float(W) / max(2.0 * half_w * m_per_unit, 1e-30)
+        len_m = flat_ink.round_length(px_per_m, lambda L_: self._label_px(_si_length(L_)))
+        L = len_m / m_per_unit
+        # bottom-RIGHT: the section inset owns the bottom-left corner
+        # just in front of the camera, so nothing in the scene can occlude it at any zoom
+        near = 0.5 * (self.dist0 if cam.parallel_projection else self.dist0 / self.zoom)
+        b = self.focal + right * (half_w * 0.92) - vup * (half_h * 0.9) + view_dir * near
+        a = b - right * L
+        for nm in ("scale_bar", "scale_label"):
+            try:
+                self.p.remove_actor(nm, render=False)
+            except Exception:                                    # noqa: BLE001
+                pass
+        # THE BAR'S COLOUR FOLLOWS THE GROUND. The movie renderer sets `_fg` from
+        # `plotting.background` (black on white, white on black); on the white ground of the
+        # cryo-EM figure look a white bar and label were invisible (exp_02 step 0014).
+        _fg = str(getattr(self.lm, "_fg", "white") or "white")
+        self.p.add_mesh(pv.Line(a, b), color=_fg, line_width=4.0, lighting=False, name="scale_bar")
+        # the label CENTRED over the bar, whose right end is at 0.96 of the window's width
+        _t = _si_length(len_m)
+        _x = (0.96 * float(W) - 0.5 * len_m * px_per_m - 0.5 * self._label_px(_t)) / float(W)
+        self.p.add_text(_t, position=(max(_x, 0.0), 0.065), viewport=True, font_size=11, color=_fg, name="scale_label")
+
+    def _label_px(self, text: str) -> float:
+        """Width in pixels of `text` as the scale label draws it (font size 11): the label's measured width per
+        character, from one rendered sample, times the characters."""
+        if getattr(self, "_label_char_px", None) is None:
+            self._label_char_px = 7.0                            # pixels per character, until measured
+            try:
+                _s = "250 \u00b5m"
+                ta = self.p.add_text(_s, position=(0.0, 0.0), viewport=True, font_size=11, name="_label_probe")
+                bb = [0.0, 0.0, 0.0, 0.0]
+                ta.GetBoundingBox(self.p.renderer, bb)
+                if bb[1] > bb[0]:
+                    self._label_char_px = float(bb[1] - bb[0]) / len(_s)
+                self.p.remove_actor("_label_probe", render=False)
+            except Exception:                                    # noqa: BLE001
+                pass
+        return self._label_char_px * len(text)
+
+    def png(self) -> bytes:
+        if self.panel is not None:
+            def _panel_png():
+                with LOCK:
+                    i = self.frame_shown if self.frame_shown is not None else len(self.panel.hist) - 1
+                    return self.panel.frame_at(i)
+            img = _vtk(_panel_png)
+            import imageio.v3 as iio
+            buf = io.BytesIO()
+            iio.imwrite(buf, np.asarray(img), extension=".png")
+            return buf.getvalue()
+        img = _vtk(self._grab)
+        import imageio.v3 as iio
+        buf = io.BytesIO()
+        iio.imwrite(buf, np.asarray(img), extension=".png")
+        return buf.getvalue()
+
+    SNAPS_MAX = 300                                              # frames kept per run by default: live_movie's max_frames
+    LIVE_PICS = 20                                               # pictures shown while the run goes
+    SNAP_BUDGET = 1_500_000_000                                  # bytes of kept positions per run
+    SCENE_INTERVAL = 3.0                                         # seconds between pick-scene rebuilds
+
+    def _snapshot(self, H):
+        """What the renderer reads, per level, copied to the CPU: the position (and separation)
+        columns, occupancy, type, parent, and the half-edge tables of a mesh level. Enough to put
+        the picture back at that frame later from ANY camera; not the whole state."""
+        import torch
+        snap = {}
+        for name, lv in H.levels.items():
+            try:
+                sch = lv.state_schema
+            except Exception:                                    # noqa: BLE001
+                continue
+            if "pos" not in sch:
+                continue
+            e = {}
+            # `vel` AND THE SOLVER BUFFERS TOO (F, C, Jp), so a frame replayed under a field colour
+            # (`speed`, `deformation`, `pressure`) is that frame's field and not the last one's.
+            # AND EVERY OTHER STATE BLOCK. A replay that put back only pos/sep/vel drew each other
+            # block at whatever the level held when the replay ran -- the re-seeded start -- so the
+            # movie's curve panels of a cell's membrane potential and a stator's stretch were flat
+            # lines at frame 0's numbers while the run's own log moved (exp_02 steps 0038, 0040,
+            # 2026-09-23). The other blocks are a few numbers per element and cost nothing to keep.
+            for key in list(getattr(sch, "_slices", {}).keys()) or ("pos", "sep", "vel"):
+                if key in sch:
+                    a, b = sch[key]
+                    e[key] = lv.state[:, a:b].detach().cpu().clone()
+            for key in ("occ", "node_type", "parent", "F", "C", "Jp"):
+                v = getattr(lv, key, None)
+                if v is not None and torch.is_tensor(v):
+                    e[key] = v.detach().cpu().clone()
+            m = getattr(lv, "_mesh", None)
+            if m:
+                e["mesh"] = {k: (v.detach().cpu().clone() if torch.is_tensor(v) else v) for k, v in m.items()}
+            snap[name] = e
+        self.snaps.append(snap)
+        self.RUN["frames_kept"] = len(self.snaps)
+
+    # ------------------------------------------------------------------ a finished run's frames
+    def _types_from_record(self):
+        """THE RUN'S OWN TYPE IDS. `type_layout: random` (the default, engine._assign_types) permutes which cell gets
+        which type at the seed, and this view's fresh seed does not land on the run's permutation (another RNG stream,
+        another device), so a replayed frame put the run's recorded positions under the view's colours: exp01 minisite
+        step 3 (2026-10-27), the water spread in white and the elastic cube held in blue. The trajectory records every
+        typed set's `node_type`; when the run is on disk it wins over the seed, for every set whose size matches."""
+        try:
+            d = self.run_dir()
+        except Exception:                                        # noqa: BLE001
+            d = None
+        if d is None:
+            return
+        import torch
+        try:
+            with np.load(os.path.join(d, "trajectory.npz")) as z:
+                for n in self.H.levels:
+                    k = f"{n}__node_type"
+                    lv = self.H.level(n)
+                    nt = getattr(lv, "node_type", None)
+                    if k in z.files and nt is not None and int(z[k].shape[0]) == int(nt.shape[0]):
+                        rec = torch.as_tensor(np.asarray(z[k]), dtype=nt.dtype, device=nt.device)
+                        if not torch.equal(rec, nt):
+                            lv.node_type = rec
+                            print(f"[view] {n}: node_type taken from the recorded run ({d})", flush=True)
+        except Exception as e:                                   # noqa: BLE001
+            print(f"[view] node_type from the record failed ({type(e).__name__}: {e})", flush=True)
+
+    def run_dir(self):
+        """Where this spec's run landed: the page's own output folder, else the run it was opened
+        from (`resolve_run`), or None."""
+        name = os.path.splitext(os.path.basename(self.spec_path))[0]
+        cands = []
+        # WHERE THE PIPELINE ACTUALLY WROTE IT. A run takes its output folder from the spec's OWN
+        # folder (`config/si_material/x.yaml` -> `graphs_data/si_material/x`), so a spec opened
+        # from anywhere but config/studio lands outside the page's own tree; the page then showed
+        # "no frames" over a complete run, or an older, aborted one that happened to sit in studio.
+        try:
+            import glob as _glob
+            from plexus.paths import graphs_data_path
+            pre = os.path.basename(os.path.dirname(os.path.abspath(self.spec_path)))
+            cands.append(os.path.join(graphs_data_path(), pre, name))
+            # AND WHEREVER IT LANDED. `/api/scene/open` copies a spec into config/studio, so the
+            # folder the page holds says "studio" while the run wrote under the spec's ORIGINAL
+            # type (config/si_material -> graphs_data/si_material). One glob finds it, and costs
+            # nothing next to reading the trajectory it points at.
+            cands += sorted(os.path.dirname(p) for p in
+                            _glob.glob(os.path.join(graphs_data_path(), "*", name, "trajectory.npz")))
+        except Exception:                                        # noqa: BLE001
+            pass
+        try:
+            from plexus.gui import studio
+            cands.append(studio.out_dir(name))
+        except Exception:                                        # noqa: BLE001
+            pass
+        try:
+            from plexus.paths import resolve_run
+            cands.append(resolve_run(name))
+        except Exception:                                        # noqa: BLE001
+            pass
+        for d in cands:
+            if d and os.path.exists(os.path.join(d, "trajectory.npz")):
+                return d
+        return None
+
+    def _snap_budget(self) -> int:
+        """Bytes of kept positions per run: the class default, or the spec's own `plotting.snap_budget_gb` -- a 1.35-million-point
+        run keeps 92 frames inside 1.5 GB, and a render that asks for 400 drawn frames has to say so (exp01, 2026-10-29)."""
+        pl = (getattr(self.sim, "plotting", None) or {})
+        return int(float(pl["snap_budget_gb"]) * 1e9) if pl.get("snap_budget_gb") else int(self.SNAP_BUDGET)
+
+    def _cap_frames(self, max_frames) -> int:
+        """Drawn frames kept per run: the caller's number, else the spec's `plotting.max_frames`, else 300 (live_movie's default)."""
+        pl = (getattr(self.sim, "plotting", None) or {})
+        return int(max_frames) if max_frames else int(pl.get("max_frames", 300))
+
+    def _traj_shape(self, z, max_frames: int, budget: int = 0):
+        """(recorded frames, frames a read would KEEP, stride) from the npz HEADERS alone -- no
+        array is read. The kept count is what the page's slider must span: a 1,602-frame tissue is
+        read back as 267 frames, and a slider that ran to 1,601 would clamp 83% of its travel."""
+        T, per_frame = None, 0
+        for n in self.H.levels:
+            sch = getattr(self.H.level(n), "state_schema", None)
+            if sch is None or "pos" not in sch:
+                continue
+            for key in ("pos", "sep"):
+                k = f"{n}__{key}"
+                if k not in z.files or key not in sch:
+                    continue
+                with z.zip.open(k + ".npy") as f:
+                    ver = np.lib.format.read_magic(f)
+                    shp = np.lib.format._read_array_header(f, ver)[0]
+                T = int(shp[0]) if T is None else min(T, int(shp[0]))
+                per_frame += int(np.prod(shp[1:])) * 4
+        if not T:
+            return 0, 0, 1
+        bud = min(self._snap_budget(), int(budget)) if budget else self._snap_budget()          # `budget`: the caller's own, smaller, byte limit on the kept positions
+        step = max(max(1, -(-T // self._cap_frames(max_frames))), max(1, -(-(T * max(per_frame, 1)) // bud)))
+        return T, len(range(0, T, step)), step
+
+    def _row_blocks(self, n):
+        """[(block, is it the cell id)] of set `n` that a replay reads row by row besides pos/sep/occ: on the drawn
+        set the block naming each point's cell (`contour_bodies.block`, default `pid`), on its parent set the block
+        the bodies are coloured by (`contour_bodies.color_by.block`)."""
+        lm = getattr(self, "lm", None)
+        sub = getattr(lm, "_sname", None) if lm is not None else None
+        if sub is None or sub not in self.H.levels:
+            return []
+        cfg = (lm.style or {}).get("contour_bodies") or {}
+        cfg = cfg if isinstance(cfg, dict) else {"block": str(cfg)}
+        out = []
+        if n == sub:
+            out.append((str(cfg.get("block", "pid")), True))
+        cb = cfg.get("color_by") or {}
+        if cb and n == (getattr(self.H.level(sub), "parent_name", None) or cfg.get("cell_set", "cell")):
+            out.append((str(cb.get("block", "chem")), False))
+        return out
+
+    _stored_kept = 0                                             # what `stored_frames` last reported
+
+    def stored_frames(self, max_frames: int = 0):
+        """(recorded, kept) of this spec's run on disk, from the file's headers -- the page only
+        wants the numbers until PLAY is pressed, and the positions are 500 MB."""
+        d = self.run_dir()
+        if d is None:
+            return 0, 0
+        try:
+            with np.load(os.path.join(d, "trajectory.npz")) as z:
+                T, kept, _ = self._traj_shape(z, max_frames)
+                self._stored_kept = kept
+                return T, kept
+        except Exception as e:                                   # noqa: BLE001
+            print(f"[view] {d}: cannot read the trajectory header ({type(e).__name__}: {e})", flush=True)
+        return 0, 0
+
+    def _seed_from_record(self, H) -> int:
+        """Every set's state blocks from the recorded run's first frame, where the recorded count matches the built
+        one. The number of sets whose positions were set (0 = no run, or nothing matched)."""
+        d = self.run_dir()
+        if d is None or not os.path.exists(os.path.join(d, "trajectory.npz")):
+            return 0
+        import torch
+        n_set = 0
+        with np.load(os.path.join(d, "trajectory.npz")) as z:
+            for n, lv in H.levels.items():
+                k = f"{n}__pos"
+                if k not in z.files:
+                    continue
+                n_el = int(lv.state.shape[0])
+                st = lv.state.clone()
+                for blk, (a, b) in lv.state_schema._slices.items():
+                    kb = f"{n}__{blk}"
+                    if kb not in z.files:
+                        continue
+                    arr = np.asarray(z[kb][0])
+                    arr = arr.reshape(arr.shape[0], -1) if arr.ndim > 1 else arr.reshape(-1, 1)
+                    if arr.shape[0] != n_el or arr.shape[1] != b - a:
+                        continue
+                    st[:, a:b] = torch.as_tensor(arr, dtype=st.dtype, device=st.device)
+                    if blk == "pos":
+                        n_set += 1
+                lv.state = st
+                ko = f"{n}__occ"
+                if ko in z.files and getattr(lv, "occ", None) is not None:
+                    o = np.asarray(z[ko][0]).reshape(-1)
+                    if o.shape[0] == n_el:
+                        lv.occ = torch.as_tensor(o, dtype=lv.occ.dtype, device=lv.occ.device)
+        return n_set
+
+    def load_run_frames(self, max_frames: int = 0, budget: int = 0):
+        """THE RUN'S OWN DATA, not its movie: the recorded trajectory read back into the same
+        per-frame level states a live run keeps, so PLAY replays the real frames through the
+        CURRENT render at ANY camera. Strided to `max_frames` and to `SNAP_BUDGET` bytes.
+
+        Read one array at a time and strided immediately: a 1,600-frame tissue holds 500 MB of
+        vertex positions, and the point of the stride is not to keep them."""
+        d = self.run_dir()
+        if d is None:
+            return 0
+        import torch
+        t0 = time.time()
+        path = os.path.join(d, "trajectory.npz")
+        with np.load(path) as z:
+            names = [n for n in self.H.levels if f"{n}__pos" in z.files]
+            if not names:
+                return 0
+            T, _kept, step = self._traj_shape(z, max_frames, budget)
+            if not T:
+                return 0
+            rows = list(range(0, T, step))
+            snaps = [{} for _ in rows]
+            for n in names:
+                sch = self.H.level(n).state_schema
+                for key in ("pos", "sep"):
+                    k = f"{n}__{key}"
+                    if k not in z.files or key not in sch:
+                        continue
+                    a = _npz_rows(z, path, k, rows)                               # one read, then only the kept rows
+                    for j in range(len(rows)):
+                        snaps[j].setdefault(n, {})[key] = torch.as_tensor(np.ascontiguousarray(a[j]), dtype=torch.float32)
+                    del a
+                k = f"{n}__occ"
+                if k in z.files:
+                    a = _npz_rows(z, path, k, rows)
+                    for j in range(len(rows)):
+                        snaps[j].setdefault(n, {})["occ"] = torch.as_tensor(np.ascontiguousarray(a[j]), dtype=torch.float32)
+                    del a
+                # THE SMALL SETS' RECORDED BLOCKS TOO (a cell's counts, its current, its gate): a replayed frame put
+                # the particles back but left `nK_in`, `q_in`, `w_open` at the seed's values, so the 3-D view's panels
+                # read nothing while the slider moved through the run (2026-09-26). Only sets of <= 16 elements.
+                # AND THE COLOUR'S OWN BLOCK, whatever the set's size: a replay that left it at the seed showed
+                # one colour on every frame (2026-10-01)
+                _cf = str(((getattr(getattr(self, "lm", None), "style", None)) or {}).get("color_field") or "")
+                if _cf and _cf in self.H.level(n).state_schema._slices and f"{n}__{_cf}" in z.files \
+                        and self.H.level(n).state.shape[0] > 16:
+                    a = _npz_rows(z, path, f"{n}__{_cf}", rows)
+                    for j in range(len(rows)):
+                        snaps[j].setdefault(n, {})[_cf] = torch.as_tensor(np.ascontiguousarray(a[j]), dtype=torch.float32)
+                    del a
+                # THE CELL OF EACH POINT, ROW BY ROW, and the cell block the bodies are coloured by: a growing or dividing
+                # run hands points from cell to cell, and the replay kept only the seed's `parent` and the seed's
+                # `npts` -- exp25_grow2's one-cell seed (1.9 % of its 2,034 live points in the slot block of their own
+                # cell) was drawn as interleaved folds at every later frame, all one pale colour (2026-10-13). The
+                # recorded block also becomes the row's `parent`, which is what the per-cell contour partitions by.
+                for blk, as_parent in self._row_blocks(n):
+                    k = f"{n}__{blk}"
+                    if k not in z.files or blk in ("pos", "sep") or blk not in self.H.level(n).state_schema._slices:
+                        continue
+                    a = _npz_rows(z, path, k, rows)
+                    _lv = self.H.level(n)
+                    _par = getattr(_lv, "parent", None)
+                    _pn = getattr(_lv, "parent_name", None)
+                    _np = int(self.H.level(_pn).state.shape[0]) if _pn and _pn in self.H.levels else 0
+                    for j in range(len(rows)):
+                        snaps[j].setdefault(n, {})[blk] = torch.as_tensor(np.ascontiguousarray(a[j]), dtype=torch.float32)
+                        if as_parent and _np and _par is not None and _par.numel() == a.shape[1]:
+                            # a dormant slot's recorded id is whatever it last held: clipped into the parent set
+                            snaps[j][n]["parent"] = torch.as_tensor(np.clip(np.rint(
+                                np.asarray(a[j], np.float64).reshape(a.shape[1], -1)[:, 0]), 0, _np - 1).astype(np.int64))
+                    del a
+                if self.H.level(n).state.shape[0] <= 16:
+                    for blk in self.H.level(n).state_schema._slices:
+                        if blk in ("pos", "sep"):
+                            continue
+                        k = f"{n}__{blk}"
+                        if k in z.files:
+                            a = _npz_rows(z, path, k, rows)
+                            for j in range(len(rows)):
+                                snaps[j].setdefault(n, {})[blk] = torch.as_tensor(np.ascontiguousarray(a[j]), dtype=torch.float32)
+                            del a
+                # THE MESH TABLE PER FRAME, ragged: row t is `E_srce[off[t]:off[t+1]]`, and the
+                # per-face columns ride their own offsets (a face is not a half-edge).
+                if f"{n}__mesh_offsets" in z.files:
+                    off = z[f"{n}__mesh_offsets"]; foff = z[f"{n}__mesh_face_offsets"]
+                    nF = z[f"{n}__mesh_nF"]; Nv = z[f"{n}__mesh_Nv"]
+                    cols = {c[len(f"{n}__mesh_"):]: z[c] for c in z.files
+                            if c.startswith(f"{n}__mesh_") and not c.endswith("_offsets")
+                            and c[len(f"{n}__mesh_"):] not in ("nF", "Nv")}
+                    ownoff = {c[len(f"{n}__mesh_"):-len("_offsets")]: z[c] for c in z.files
+                              if c.startswith(f"{n}__mesh_") and c.endswith("_offsets")
+                              and c not in (f"{n}__mesh_offsets", f"{n}__mesh_face_offsets")}
+                    for j, t in enumerate(rows):
+                        if t + 1 >= len(off):
+                            continue
+                        m = {"nF": int(nF[t]), "Nv": int(Nv[t])}
+                        for cname, arr in cols.items():
+                            if arr.ndim == 1 and arr.shape[0] == len(nF):      # one value per row
+                                m[cname] = float(arr[t]); continue
+                            o = ownoff.get(cname)
+                            if o is not None:
+                                sl = slice(int(o[t]), int(o[t + 1]))
+                            elif cname in ("E_srce", "E_trgt", "E_face"):
+                                sl = slice(int(off[t]), int(off[t + 1]))
+                            else:
+                                sl = slice(int(foff[t]), int(foff[t + 1]))
+                            m[cname] = torch.as_tensor(np.ascontiguousarray(arr[sl]))
+                        snaps[j].setdefault(n, {})["mesh"] = m
+        self.snaps = snaps
+        self._keep_every = step
+        self.RUN.update(n_frames=T - 1, frames_kept=len(snaps), keep_every=step, frame=T - 1, running=False)
+        self.lm.n_frames = int(T - 1)                            # the overlay's denominator is the run's
+        # A RECORD IS MANY FRAMES: the panels' time axis is per simulation frame (`curve_time.per_frame_s`), and a row
+        # here is a record -- 0-0.47 ns for a 47 ns run, as the trajectory replay had it (exp04 step 0050)
+        _nf = getattr(self.sim, "n_frames", None)
+        if _nf and T > 1 and getattr(self.lm, "_curve_xs", None):
+            _fpr = float(_nf) / float(T - 1)
+            self.lm._curve_xs = float(self.lm._curve_xs) / float(getattr(self.lm, "_frames_per_row", 1.0)) * _fpr
+            self.lm._frames_per_row = _fpr
+            for _cv in getattr(self.lm, "_curves", []) or []:
+                try:
+                    _cv["ch"].x_axis.range = [0.0, float(_cv["S"].shape[0] - 1) * self.lm._curve_xs]
+                except Exception:                                # noqa: BLE001
+                    pass
+        self.lm.t0 = time.perf_counter()
+        # THE FIELD'S COLOUR RANGE FROM THE WHOLE RUN, now that its frames are here: deformation,
+        # stress or speed measured over a sample of them rather than settled on one frame. A field
+        # the trajectory cannot rebuild (it stores no F, C or velocity) simply leaves the range as
+        # it was -- `_range_from_frames` asks the renderer and gives up quietly.
+        self._range_from_frames()
+        print(f"[view] {len(snaps)} of {T} recorded frames from {path} in {time.time() - t0:.1f}s "
+              f"(every {step})", flush=True)
+        return len(snaps)
+
+    def show_frame(self, i: int):
+        """Put the picture at kept frame `i` (on the VTK thread): the levels of the view's own
+        hierarchy take the snapshot's columns, then the movie renderer redraws them as it would
+        have during the run. The camera is whatever the page set, so a replay can be orbited."""
+        return _vtk(self._show_frame, i)
+
+    def _show_frame(self, i: int):
+        if self.panel is not None:
+            self.frame_shown = max(0, min(int(i), len(self.panel.hist) - 1)) if self.panel.hist else None
+            return
+        if not self.snaps:
+            # A FRAME WAS ASKED FOR AND NOTHING IS IN MEMORY: read the spec's recorded run, once.
+            # The page tried to do this in JS before each drag, which meant the FIRST picture of a
+            # freshly opened scene silently ignored `frame=` (the slider showed the seed at every
+            # position), and a drag started one load per input event. The server owns it now: the
+            # index is rescaled from the slider's span to what the read actually kept.
+            n_before = self._stored_kept
+            if not self.load_run_frames():
+                return
+            if n_before and len(self.snaps) and n_before != len(self.snaps):
+                i = int(round(int(i) * (len(self.snaps) - 1) / max(n_before - 1, 1)))
+            if not self.snaps:
+                return
+        i = max(0, min(int(i), len(self.snaps) - 1))
+        snap = self.snaps[i]
+        with LOCK:
+            H = self.H
+            for name, e in snap.items():
+                if name not in H.levels:
+                    continue
+                lv = H.level(name)
+                dev = lv.state.device
+                for key in e:
+                    if key in ("occ", "node_type", "parent", "F", "C", "Jp", "mesh"):
+                        continue
+                    if key in lv.state_schema:
+                        a, b = lv.state_schema[key]
+                        lv.state[:, a:b] = e[key].to(dev)
+                for key in ("occ", "node_type", "parent", "F", "C", "Jp"):
+                    v = getattr(lv, key, None)
+                    if key in e and v is not None and v.shape == e[key].shape:
+                        v.copy_(e[key].to(dev))
+                if "mesh" in e and getattr(lv, "_mesh", None) is not None:
+                    for k, v in e["mesh"].items():
+                        lv._mesh[k] = v.to(dev) if hasattr(v, "to") else v
+            _look = getattr(self, "look", None)
+            if _look is not None:                                # a scene with the dots/isosurface toggle
+                self._frame_live()
+                if _look == "iso":
+                    self._iso_grid()
+            self.lm(H, i * self._keep_every)
+            if getattr(self.lm, "cs", None) is not None:
+                self.lm._update_cross_section(H)
+            self.frame_shown = i
+            if _look == "iso":
+                self._flat_iso()
+            if _look is not None:
+                self._set_camera()                               # the new framing; in the dots look, the dots
+
+    def _range_from_frames(self, n_sample: int = 24):
+        """THE COLOUR RANGE OF A FIELD, FROM THE RUN: with the run's frames in memory and a field
+        colour asked for (`plotting.color_field` without a `color_range`), the range is the 2nd to
+        98th percentile over a sample of the kept frames -- the whole run's deformation, stress or
+        speed -- rather than whatever the first frame with a field happened to hold."""
+        lm = self.lm
+        st = lm.style or {}
+        if lm is None or not st.get("color_field") or st.get("color_range") or not self.snaps:
+            return
+        import torch
+        try:
+            lvl = self.H.level(lm._sname)
+        except Exception:                                        # noqa: BLE001
+            return
+        vals = []
+        idxs = np.unique(np.linspace(1, len(self.snaps) - 1, min(n_sample, len(self.snaps) - 1)).astype(int))
+        for i in idxs:
+            self._show_frame(int(i))
+            try:
+                val, _ = lm._field(self.H, lvl)
+            except Exception:                                    # noqa: BLE001
+                return
+            if val is not None:
+                vals.append(val.detach().float().flatten()[:: max(1, val.numel() // 50_000)].cpu())
+        if not vals:
+            return
+        allv = torch.cat(vals)
+        q = torch.quantile(allv, torch.tensor([0.02, 0.98]))
+        lo, hi = float(q[0]), float(q[1])
+        if hi > lo:
+            lm.style["color_range"] = [lo, hi]
+            lm._frng = (lo, hi)
+            print(f"[view] {st.get('color_field')} range from {len(idxs)} kept frames: [{lo:.4g}, {hi:.4g}]", flush=True)
+        self._show_frame(0)
+
+    def _grab(self):
+        with LOCK:
+            try:                                                 # the near plane fitted to every actor (see live_movie)
+                self.p.renderer.ResetCameraClippingRange()
+            except Exception:                                    # noqa: BLE001
+                pass
+            self.p.render()                                      # screenshot() alone returns the stale frame
+            img = np.asarray(self.p.screenshot(return_img=True)).copy()
+            # THE SURFACE WITHOUT THE INK PASS (Cedric, 2026-10-27: the opaque, outline-free surface render "best so
+            # far"); the dots keep their outlines and shading. `ink=0/1` on the render query overrides either.
+            _ink_default = getattr(self, "look", None) == "dots"
+            if getattr(self, "look", None) is not None and self.palette == "vivid" and getattr(self, "ink_on", _ink_default):
+                img = self._ink(img)                             # the depth buffer is still the frame's
+            return img
+
+    # ------------------------------------------------------------------ picking by projection
+    def _candidates(self):
+        """(positions [n,3], ids ['set:idx', ...]) of everything a click may mean."""
+        P, ids = [], []
+        T = self.scene.get("tissue")
+        for name, st in self.scene["sets"].items():
+            if not st.get("pos"):
+                continue
+            if T and name == T["set"]:
+                V = np.asarray(T["caps"]["mid"]["verts"], float)
+                P.append(V[: T["Nv"]]); ids += [f"{name}:{i}" for i in range(T["Nv"])]
+                P.append(V[T["Nv"]:]); ids += [f"cell:{f}" for f in range(len(V) - T["Nv"])]
+                continue
+            sp_names = st.get("type_names") or []
+            nt = st.get("node_type") or [0] * len(st["pos"])
+            keep = [i for i in range(len(st["pos"])) if not sp_names or sp_names[nt[i]] not in self.hidden]
+            if keep:
+                P.append(np.asarray(st["pos"], float)[keep]); ids += [f"{name}:{i}" for i in keep]
+        if not P:
+            return np.zeros((0, 3)), []
+        return np.concatenate(P, 0), ids
+
+
+    # ---------------------------------------------------------------------------- the live surface
+    def _live_mesh(self):
+        """(pos, sep, E_srce, E_trgt, E_face) of the mesh the renderer is drawing, from the LIVE
+        hierarchy -- not from `self.scene`, which is the seed's geometry and goes stale the moment
+        the tissue grows or a recorded frame is replayed."""
+        lm = self.lm
+        for nm, lv in self.H.levels.items():
+            m = getattr(lv, "_mesh", None) or getattr(lv, "mesh", None)
+            if not m or not int(m.get("nF", 0) or 0):
+                continue
+            nv = int(m["Nv"])
+            _np_ = lambda v: (v.detach().cpu().numpy() if hasattr(v, "detach") else np.asarray(v))   # noqa: E731
+            pos = _np_(lv.get("pos"))[:nv].astype(float)
+            try:
+                sep = _np_(lv.get("sep"))[:nv].astype(float)
+            except Exception:                                    # noqa: BLE001
+                sep = np.zeros_like(pos)
+            es, et, ef = (_np_(m[k]).astype(int) for k in ("E_srce", "E_trgt", "E_face"))
+            live = (ef >= 0) & (ef < int(m["nF"])) & (es >= 0) & (et >= 0)
+            eocc = m.get("eocc", None)
+            if eocc is not None:
+                live &= _np_(eocc)[: es.shape[0]] > 0
+            sh = getattr(lm, "_shift", None)
+            if sh is not None:
+                pos = pos + np.asarray(sh, float)
+            return pos, sep, es[live], et[live], ef[live]
+        return None
+
+    def _cap_k(self):
+        """+1 apical, -1 basal, 0 mid: which surface the renderer draws (`plotting.mesh_surface`)."""
+        s = str(((self.lm.style if self.lm is not None else None) or {}).get("mesh_surface", "mid")).lower()
+        return {"apical": 1.0, "basal": -1.0}.get(s, 0.0)
+
+    @staticmethod
+    def _screen(A, P):
+        """World points -> (screen x, screen y as fractions from the top-left, ndc depth, in front?)."""
+        X = np.concatenate([np.asarray(P, float), np.ones((len(P), 1))], 1) @ A.T
+        w = np.where(np.abs(X[:, 3]) < 1e-12, 1e-12, X[:, 3])
+        ndc = X[:, :3] / w[:, None]
+        return (ndc[:, 0] + 1) / 2, (1 - ndc[:, 1]) / 2, ndc[:, 2], w > 0
+
+    def _cell_at(self, fx, fy, A):
+        """The CELL whose cap the click lands on: the surface is drawn as triangles with a face id
+        each, so the answer is an inside test on the projected triangle, nearest the camera. No
+        tolerance is involved -- a click anywhere on a cell names that cell, which is what a click
+        on a tissue means. Nearest-centroid (what this did before) answered only when the click
+        happened to fall within 1.2% of the screen of a centroid: one hit in six, measured."""
+        mesh = self._live_mesh()
+        if mesh is None:
+            return None
+        pos, sep, es, et, ef = mesh
+        best, best_z = None, np.inf
+        for kcap in ({self._cap_k()} if self._cap_k() else {1.0, -1.0}):
+            X = pos + kcap * sep
+            cen = np.zeros((int(ef.max()) + 1, 3)); cnt = np.bincount(ef, minlength=cen.shape[0]).clip(1)
+            np.add.at(cen, ef, X[es]); cen /= cnt[:, None]
+            verts = np.concatenate([X, cen], 0)                  # ring vertices, then the face centroids
+            sx, sy, z, front = self._screen(A, verts)
+            tri = np.stack([len(X) + ef, es, et], 1); face = ef
+            ax, ay = sx[tri[:, 0]], sy[tri[:, 0]]
+            bx, by = sx[tri[:, 1]], sy[tri[:, 1]]
+            cx, cy = sx[tri[:, 2]], sy[tri[:, 2]]
+            # barycentric of the click in each triangle
+            den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
+            den = np.where(np.abs(den) < 1e-12, 1e-12, den)
+            l1 = ((by - cy) * (fx - cx) + (cx - bx) * (fy - cy)) / den
+            l2 = ((cy - ay) * (fx - cx) + (ax - cx) * (fy - cy)) / den
+            l3 = 1.0 - l1 - l2
+            eps = -1e-6
+            inside = (l1 >= eps) & (l2 >= eps) & (l3 >= eps) & front[tri].all(1)
+            if not inside.any():
+                continue
+            zt = (l1 * z[tri[:, 0]] + l2 * z[tri[:, 1]] + l3 * z[tri[:, 2]])
+            k = int(np.argmin(np.where(inside, zt, np.inf)))
+            if zt[k] < best_z:
+                best, best_z = int(face[k]), float(zt[k])
+        return None if best is None else f"cell:{best}"
+
+    def pick_at(self, fx: float, fy: float, tol: float = 0.03) -> str | None:
+        """The object under the click at screen fractions (fx from the left, fy from the top).
+
+        THE CELL FIRST. On a tissue a click means the cell it landed on, and that is an exact test
+        against the drawn surface; only a click that misses the tissue altogether falls through to
+        the nearest point (a material scene has no surface, so that is its only path). `tol` is the
+        fall-through radius, 3% of the screen width."""
+        if self.panel is not None:
+            return None
+        def _proj():
+            W, Hh = self.p.window_size
+            M = self.p.camera.GetCompositeProjectionTransformMatrix(float(W) / float(Hh), -1.0, 1.0)
+            return W, Hh, np.array([[M.GetElement(i, j) for j in range(4)] for i in range(4)], float)
+        W, Hh, A = _vtk(_proj)
+        hit = self._cell_at(fx, fy, A)
+        if hit is not None:
+            return hit
+        P, ids = self._candidates()
+        if not ids:
+            return None
+        sx, sy, z, front = self._screen(A, P)
+        d2 = (sx - fx) ** 2 + ((sy - fy) * Hh / W) ** 2
+        ok = front & (d2 < tol ** 2)
+        if not ok.any():
+            return None
+        score = np.where(ok, d2 + 0.02 * tol ** 2 * z, np.inf)             # nearer to the camera on a tie
+        return ids[int(np.argmin(score))]
+
+    def _outline_contents(self, k: int):
+        """WHAT THE CELL HOLDS, RINGED IN THE SAME YELLOW: every piece or cluster whose parent is
+        this cell, drawn as a wireframe sphere of its own declared radius (`plotting.dot_radius`),
+        so a nucleus inside a picked cell is visible as a nucleus and not as a dot."""
+        import pyvista as pv
+        lm = self.lm
+        rad = (self.sim.plotting or {}).get("dot_radius") or {}
+        try:
+            lm.p.remove_actor("pick_inside", render=False)
+        except Exception:                                        # noqa: BLE001
+            pass
+        blocks = []
+        for name, st in (self.scene.get("sets") or {}).items():
+            par = st.get("parent")
+            if not par or not st.get("pos"):
+                continue
+            names = st.get("type_names") or []
+            nt = st.get("node_type") or [0] * len(par)
+            for i, p in enumerate(par):
+                if int(p) != int(k):
+                    continue
+                sp = names[nt[i]] if names else name
+                r = float(rad.get(sp, 0.0))
+                if r <= 0:
+                    continue
+                blocks.append(pv.Sphere(radius=r, center=st["pos"][i], theta_resolution=18, phi_resolution=12))
+        if not blocks:
+            return
+        body = blocks[0] if len(blocks) == 1 else blocks[0].merge(blocks[1:])
+        lm.p.add_mesh(body, color="#ffee33", style="wireframe", line_width=2, lighting=False, name="pick_inside")
+
+    def highlight(self, pick: str | None):
+        return _vtk(self._highlight, pick)
+
+    def _highlight(self, pick: str | None):
+        """PAINT THE PICKED BODY YELLOW -- the body itself, not a marker around it: its particles in
+        the point cloud (their colours are put back when the pick moves on), or its surface actor
+        when the scene is contoured per body."""
+        self.pick = pick
+        if self.panel is not None or self.lm is None:
+            return
+        with LOCK:
+            lm = self.lm
+            # put back what the last pick painted
+            _prev = getattr(self, "_paint", None)
+            if _prev is not None:
+                sel, rgb = _prev
+                try:
+                    cur = np.asarray(lm.cloud["rgb"]).copy(); cur[sel] = rgb; lm.cloud["rgb"] = cur
+                    if getattr(lm, "_base_rgb", None) is not None:
+                        lm._base_rgb[sel] = rgb
+                except Exception:                                # noqa: BLE001
+                    pass
+                self._paint = None
+            try:
+                lm.p.remove_actor("pick_inside", render=False)
+            except Exception:                                    # noqa: BLE001
+                pass
+            _pa = getattr(self, "_paint_actor", None)
+            if _pa == "pick_cell":
+                try:
+                    lm.p.remove_actor("pick_cell", render=False)
+                except Exception:                                # noqa: BLE001
+                    pass
+                self._paint_actor = None
+            elif _pa:
+                act = lm.p.renderer.actors.get(_pa) if lm.p is not None else None
+                if act is not None:
+                    try:
+                        act.GetProperty().SetColor(*self._paint_color)
+                    except Exception:                            # noqa: BLE001
+                        pass
+                self._paint_actor = None
+            if not pick or not pick.startswith("cell:"):
+                return
+            try:
+                k = int(pick.split(":", 1)[1])
+            except ValueError:
+                return
+            lvl = H_lvl = None
+            try:
+                H_lvl = self.H.level(getattr(lm, "_sname", None))
+            except Exception:                                    # noqa: BLE001
+                H_lvl = None
+            if H_lvl is None:
+                return
+            # the contour per body: the actor is named by the body's type
+            names = list(getattr(self.H.level("cell"), "type_names", []) or []) if "cell" in self.H.levels else []
+            nt = getattr(self.H.level("cell"), "node_type", None) if "cell" in self.H.levels else None
+            if names and nt is not None and k < int(nt.numel()):
+                tname = names[int(nt[k])]
+                act = lm.p.renderer.actors.get(f"contour_{tname}") if lm.p is not None else None
+                if act is not None:
+                    self._paint_color = act.GetProperty().GetColor()
+                    act.GetProperty().SetColor(1.0, 0.93, 0.2)
+                    self._paint_actor = f"contour_{tname}"
+                    return
+            # A TISSUE'S CELL IS A RING OF EDGES, not a set of contained points: its own apical and
+            # basal cap edges plus the lateral edges joining them, drawn in yellow. That IS the
+            # object -- the cell has no particles of its own to paint.
+            # A TISSUE CELL IS OUTLINED BY ITS OWN EDGES, ON THE SURFACE THAT IS DRAWN. Taken from
+            # the scene dict and from both caps, the ring was the SEED's geometry and half of it
+            # belonged to a cap nobody draws, so the yellow hung in the air above the spheroid.
+            mesh = self._live_mesh()
+            if mesh is not None:
+                import pyvista as pv
+                pos, sep, es, et, ef = mesh
+                mine = ef == k
+                if mine.any():
+                    # THE WHOLE CELL: both rings and the walls between them. Drawing only the cap
+                    # the renderer shows says where the cell is but not what it is -- an apico-basal
+                    # cell is a prism, and the apical ring is the half a picture of the basal
+                    # surface cannot show. The rings are the real caps, pos +- sep, so the outline
+                    # is the cell's own edges wherever the camera is.
+                    A_, B_ = pos + sep, pos - sep
+                    seg = [(A_[a], A_[b]) for a, b in zip(es[mine], et[mine])]      # apical ring
+                    seg += [(B_[a], B_[b]) for a, b in zip(es[mine], et[mine])]     # basal ring
+                    seg += [(A_[a], B_[a]) for a in es[mine]]                       # the lateral walls
+                    pts = np.asarray([p for sg in seg for p in sg], float)
+                    lines = np.concatenate([[2, 2 * j, 2 * j + 1] for j in range(len(seg))])
+                    pd = pv.PolyData(pts); pd.lines = lines
+                    lm.p.add_mesh(pd, color="#ffee33", line_width=5, lighting=False,
+                                  render_lines_as_tubes=True, name="pick_cell")
+                    self._paint_actor = "pick_cell"
+                    self._outline_contents(k)
+                return
+            par = getattr(H_lvl, "parent", None)
+            idx = getattr(lm, "idx", None)
+            if par is None or idx is None or getattr(lm, "cloud", None) is None:
+                return
+            sel = (par.detach().cpu().numpy()[np.asarray(idx)] == k)
+            if not sel.any():
+                return
+            try:
+                cur = np.asarray(lm.cloud["rgb"]).copy()
+                self._paint = (sel, cur[sel].copy())
+                cur[sel] = np.array([255, 238, 51], np.uint8)
+                lm.cloud["rgb"] = cur
+                if getattr(lm, "_base_rgb", None) is not None:
+                    lm._base_rgb[sel] = np.array([255, 238, 51], np.uint8)
+            except Exception:                                    # noqa: BLE001
+                self._paint = None
+
+    def _thickness(self) -> float:
+        """The tissue's cell thickness (2|sep| averaged), or 1 without a tissue."""
+        T = self.scene.get("tissue")
+        if not T:
+            return 1.0
+        A = np.asarray(T["caps"]["apical"]["verts"][: T["Nv"]], float)
+        B = np.asarray(T["caps"]["basal"]["verts"][: T["Nv"]], float)
+        h = float(np.linalg.norm(A - B, axis=1).mean())
+        return h if h > 0 else 1.0
+
+    # ------------------------------------------------------------------ visibility by species
+    def set_visible(self, species: str, on: bool):
+        return _vtk(self._set_visible, species, on)
+
+    def _set_visible(self, species: str, on: bool):
+        if self.panel is not None:
+            return False
+        with LOCK:
+            acts = [a for n, a in self.p.renderer.actors.items() if n.startswith("glyph_") and n.endswith("_" + species)]
+            if not acts:
+                return False
+            for act in acts:
+                act.SetVisibility(bool(on))
+            (self.hidden.discard if on else self.hidden.add)(species)
+            return True
+
+    def species(self) -> list:
+        names = []
+        for st in self.scene["sets"].values():
+            for n in st.get("type_names") or []:
+                if n not in names:
+                    names.append(n)
+        return names
+
+    # ------------------------------------------------------------------ running the engine
+    def run(self, device: str | None = None, **_ignored) -> dict:
+        """Generate the spec THROUGH THE PIPELINE -- `plexus.pipeline.generate`, the body of
+        `Plexus_Main.py -o generate` -- on the VTK thread, with its per-frame hook feeding this
+        view.
+
+        WHY ON THE VTK THREAD. The pipeline builds its own `LiveMovie` (the movie.mp4 and the stills
+        in graphs_data/studio/<name>/); VTK gives one off-screen context per thread, and a second
+        plotter on a second thread died with `std::bad_array_new_length`. So the run is submitted to
+        the one VTK thread, both plotters live there, and the hook drains `_PENDING` -- the page's
+        camera moves, picks and screenshots -- between frames. That is what makes orbit and zoom
+        work DURING generation: every request is answered on the thread that owns the context, at
+        most one frame late.
+
+        What the hook does per tick: counts (cheap), a snapshot every movie stride (so PLAY can
+        replay the run at any camera, the movie's own frames), and a redraw of this view's plotter
+        whenever a request is waiting or a still is due, so the picture the page asks for is the
+        frame being computed."""
+        import torch
+        if self.RUN.get("running"):
+            return {"error": "already running; STOP it first"}
+        dev = device or ("cuda:0" if torch.cuda.is_available() else "cpu")
+        n = int(self.sim.n_frames)
+        self.RUN.update(running=True, frame=0, n_frames=n, seconds=0.0, error=None, stop=False, device=dev,
+                        started=time.time(), frames_kept=0, out_dir=None, stopped=False, ms_per_frame=None)
+        self.snaps = []
+        if self.panel is not None:
+            self.panel.hist = []; self.panel.n_frames = n; self.frame_shown = None
+        else:
+            # THE OVERLAY'S DENOMINATOR IS THIS RUN'S LENGTH, not the 1 the renderer was built with to draw the seed.
+            self.lm.n_frames = n
+            self.lm.t0 = time.perf_counter()
+        # THE MOVIE'S OWN STRIDES. Kept frames for PLAY are the frames the pipeline's movie keeps
+        # (`plotting.max_frames`, live_movie.py:256), widened only by a memory budget on the kept
+        # positions; the picture is refreshed at the pipeline's stills (`plotting.stills`) and
+        # whenever the page asks.
+        pl = self.sim.plotting or {}
+        per_frame = 0
+        for lv in self.H.levels.values():
+            sch = getattr(lv, "state_schema", None)
+            if sch is not None and "pos" in sch:
+                for key in ("pos", "sep", "vel"):
+                    if key in sch:
+                        a, b = sch[key]
+                        per_frame += int(lv.state.shape[0]) * (b - a) * 4
+                for key in ("F", "C", "Jp"):                    # the solver buffers ride along
+                    v = getattr(lv, key, None)
+                    if v is not None and torch.is_tensor(v):
+                        per_frame += int(v.numel()) * 4
+        by_count = max(1, -(-n // max(1, int(pl.get("max_frames", 300)))))
+        by_mem = max(1, -(-((n + 1) * max(per_frame, 1)) // self._snap_budget()))
+        self._keep_every = max(by_count, by_mem)
+        self._draw_every = max(1, -(-n // max(1, int(pl.get("stills", 10)))))
+        self.RUN["keep_every"] = self._keep_every
+        self.RUN["draw_every"] = self._draw_every
+        self._last_scene = 0.0
+        from plexus.pipeline import StopRun
+
+        def _on_frame(H, tick):
+            if self.RUN.get("stop"):
+                raise StopRun()
+            now = time.time()
+            with LOCK:
+                self.H = H
+                if self.panel is not None:
+                    if tick % self._keep_every == 0 or tick == n:
+                        self.panel.capture(H, tick)
+                        self.RUN["frames_kept"] = len(self.panel.hist)
+                else:
+                    due = tick == n or tick % self._draw_every == 0
+                    if due or not _PENDING.empty():
+                        self.lm(H, tick)
+                        if getattr(self.lm, "cs", None) is not None and tick == 0:
+                            self.lm._update_cross_section(H)
+                    if tick % self._keep_every == 0 or tick == n:
+                        self._snapshot(H)
+                if tick == n or (now - self._last_scene) >= self.SCENE_INTERVAL:
+                    from plexus.gui import bio
+                    self.scene = bio.scene_from(H, self.sim, self.spec_path)
+                    if self.pick:
+                        self._highlight(self.pick)
+                    self._last_scene = time.time()
+            self.RUN["frame"] = int(tick)
+            self.RUN["seconds"] = round(time.time() - self.RUN["started"], 1)
+            self.RUN["counts"] = self.counts_live(H)
+            _drain()                                                 # the page's camera, between frames
+
+        def _go():
+            _VTK_THREAD["ident"] = threading.get_ident()
+            from plexus import pipeline
+            from plexus.gui import studio
+            # THE ENGINE'S OWN OUTPUT, KEPT -- WITHOUT TOUCHING sys.stdout. The first version of
+            # this wrapped `generate` in `contextlib.redirect_stdout/stderr`, and that hung the
+            # run at frame 0 with no error and no log file: those helpers swap the PROCESS-WIDE
+            # streams, and this runs on the VTK worker while the HTTP threads are printing to the
+            # same ones. A per-thread capture is what was wanted and is not what they do.
+            #
+            # So the engine keeps printing to the terminal as it always did, and a COPY is taken
+            # afterwards from the run directory the pipeline itself writes. Less immediate, and it
+            # cannot deadlock anything.
+            log_path = ""
+            try:
+                log_path = os.path.join(studio.REPO, "log", "gui_runs",
+                                        f"{os.path.splitext(os.path.basename(self.spec_path))[0]}.log")
+                os.makedirs(os.path.dirname(log_path), exist_ok=True)
+                self.RUN["log"] = log_path
+                r = pipeline.generate(self.spec_path, device=dev, force=True, describe=False, on_frame=_on_frame)
+                self.RUN["out_dir"] = r.get("data_dir")
+                self.RUN["stopped"] = bool(r.get("stopped"))
+                fm = r.get("frame_ms")
+                if fm is not None and len(fm) > 1:
+                    self.RUN["ms_per_frame"] = float(np.mean(np.asarray(fm)[1:]))
+            except Exception as e:                                   # noqa: BLE001
+                # A RUN THAT CANNOT START MUST SAY SO, not look like a stall. The message also goes
+                # to the session, because a reseed builds a new View and takes its RUN dict with it:
+                # the page then polled a fresh "frame 0, no error" and read it as a hang.
+                self.RUN["error"] = f"{type(e).__name__}: {e}"[:600]
+                try:
+                    from plexus.gui import bio
+                    bio.STATE["message"] = f"run failed: {self.RUN['error']}"
+                    bio.claude_note(f"run of '{os.path.basename(self.spec_path)}' failed: {self.RUN['error']}")
+                except Exception:                                    # noqa: BLE001
+                    pass
+                print(f"[view] run failed: {self.RUN['error']}", flush=True)
+            finally:
+                # WHAT THE RUN LEFT ON DISK, summarised into the log this session reads. The
+                # engine's console output is not captured (see above); what IS durable is the run
+                # directory, so the log records where it is and what is in it.
+                try:
+                    _d = self.RUN.get("out_dir") or ""
+                    with open(log_path or os.path.join(os.path.expanduser("~"), "plexus_run.log"),
+                              "w") as _fh:
+                        _fh.write(f"spec      {self.spec_path}\n")
+                        _fh.write(f"device    {dev}\n")
+                        _fh.write(f"frames    {self.RUN.get('frame')}/{n}\n")
+                        _fh.write(f"seconds   {round(time.time() - self.RUN['started'], 1)}\n")
+                        _fh.write(f"ms/frame  {self.RUN.get('ms_per_frame')}\n")
+                        _fh.write(f"stopped   {self.RUN.get('stopped')}\n")
+                        _fh.write(f"error     {self.RUN.get('error')}\n")
+                        _fh.write(f"out_dir   {_d}\n")
+                        if _d and os.path.isdir(_d):
+                            for nm in sorted(os.listdir(_d)):
+                                _p = os.path.join(_d, nm)
+                                _sz = os.path.getsize(_p) if os.path.isfile(_p) else 0
+                                _fh.write(f"  {nm}  {_sz:,} B\n")
+                except Exception:                                    # noqa: BLE001
+                    pass
+                self.RUN["running"] = False
+                self.RUN["seconds"] = round(time.time() - self.RUN["started"], 1)
+                _drain()
+        # THE FUTURE IS READ. `submit` hands back a Future, and an exception that escapes the
+        # task is stored in it and re-raised only when someone asks -- so an unread Future is a
+        # traceback thrown away. This callback asks. It costs one function call per run and it is
+        # the difference between "the run failed with X" and a scene that sits at frame 0 for
+        # three minutes with the GPU at 0% and nothing in any log.
+        def _done(fut):
+            exc = fut.exception()
+            if exc is None:
+                return
+            self.RUN["error"] = f"{type(exc).__name__}: {exc}"[:600]
+            self.RUN["running"] = False
+            import traceback
+            print(f"[view] run task died: {self.RUN['error']}", flush=True)
+            traceback.print_exception(type(exc), exc, exc.__traceback__)
+
+        _EXEC.submit(_go).add_done_callback(_done)
+        return {"started": True, "frames": n, "device": dev}
+
+    def stop(self) -> dict:
+        self.RUN["stop"] = True
+        return {"stopping": True}
+
+    def counts_live(self, H=None) -> dict:
+        """Live count per set and per species, straight off the hierarchy (cheap, every frame)."""
+        import torch
+        H = H or self.H
+        out = {"sets": {}, "species": {}}
+        for name, lv in H.levels.items():
+            occ = getattr(lv, "active", None)
+            if occ is None:
+                occ = getattr(lv, "occ", None)
+            if occ is None:
+                continue
+            live = torch.as_tensor(occ) > 0
+            out["sets"][name] = int(live.sum())
+            names = list(getattr(lv, "type_names", []) or [])
+            nt = getattr(lv, "node_type", None)
+            if names and nt is not None:
+                for i, nm in enumerate(names):
+                    out["species"][nm] = int((live & (torch.as_tensor(nt) == i)).sum())
+        return out
+
+    RUN: dict = {"running": False, "frame": 0, "n_frames": 0, "seconds": 0.0, "error": None, "stop": False, "counts": {}}
+
+    def close(self):
+        self.RUN["stop"] = True
+
+        def _c():
+            with LOCK:
+                try:
+                    (self.panel.close() if self.panel is not None else self.lm.close())
+                except Exception:                                # noqa: BLE001
+                    pass
+        _vtk(_c)
+
+
+def open_view(spec_path: str, device: str = "cpu", carry: bool = False) -> View:
+    """Replace the session's view with a fresh one for `spec_path`, built on the VTK thread.
+
+    `carry=True` KEEPS THE LAST RUN'S FRAMES on the new view when it is the same scene -- same
+    spec name, every set the same buffer shape -- so a change of render (dot size, surface,
+    light) re-opens the renderer and PLAY replays the frames already in memory through it,
+    rather than asking for the run again. The frames are level states, not pictures, which is
+    what makes them re-drawable at all."""
+    def _open():
+        old0 = CURRENT.get("view")
+        # A RESEED DURING A RUN KILLED THE RUN. `open_view` closes the old view, and the running
+        # generate then found its plotter gone and reported "stopped early" at frame 11 of 601 --
+        # from the page that looked like a run that produced two frames. Stop it first, and wait
+        # for the engine thread to notice, so the frames it did compute are kept.
+        if old0 is not None and (getattr(old0, "RUN", {}) or {}).get("running"):
+            old0.RUN["stop"] = True
+            t0 = time.time()
+            while old0.RUN.get("running") and time.time() - t0 < 10.0:
+                time.sleep(0.05)
+            print("[view] a run was in flight and was stopped so the scene could be re-seeded", flush=True)
+        with LOCK:
+            old = CURRENT.get("view")
+            keep = None
+            if old is not None and carry and os.path.basename(old.spec_path) == os.path.basename(spec_path):
+                keep = old
+            if old is not None:
+                old.close()
+            CURRENT["view"] = None
+            v = View(spec_path, device)
+            if keep is not None and keep.snaps and getattr(v, "panel", None) is None:
+                same = all(n in v.H.levels and tuple(v.H.level(n).state.shape) == tuple(keep.H.level(n).state.shape)
+                           for n in keep.H.levels)
+                if same:
+                    v.snaps = keep.snaps
+                    v._keep_every = getattr(keep, "_keep_every", 1)
+                    v.RUN = dict(keep.RUN); v.RUN["running"] = False
+                    v.lm.n_frames = int(v.RUN.get("n_frames") or 1)   # the overlay's denominator is the run's
+                    v.lm.n = v.lm.n_frames
+                    print(f"[view] {len(v.snaps)} frames of the last run carried to the new render", flush=True)
+                    v._range_from_frames()
+            elif keep is not None and getattr(v, "panel", None) is not None and getattr(keep, "panel", None) is not None:
+                v.panel.hist = keep.panel.hist
+                v.RUN = dict(keep.RUN); v.RUN["running"] = False
+            CURRENT["view"] = v
+            return v
+    return _vtk(_open)
+
+
+def current() -> View | None:
+    """The session's view, WAITING for a rebuild in progress rather than reporting none.
+
+    `open_view` parks `CURRENT["view"]` at None while it builds the replacement, which takes
+    seconds; a request that arrived in that window was told "no scene is open" and its picture
+    never changed -- the slider counting up over a frozen image. The lock is the one `open_view`
+    holds while it builds, and it is re-entrant, so a call from the VTK thread still passes."""
+    v = CURRENT.get("view")
+    if v is not None:
+        return v
+    with LOCK:
+        return CURRENT.get("view")

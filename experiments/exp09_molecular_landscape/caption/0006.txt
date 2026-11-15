@@ -1,0 +1,4 @@
+- video name: 0006
+- description: The simulation shows a dense collection of multi-colored particles interacting within a confined space. A horizontal orange barrier separates a top region of blue and green particles from a bottom region containing a diverse mix of colors. Over time, the particles in the lower region exhibit complex motion and collisions, while the upper region remains relatively stable. The overall scene depicts a dynamic fluid or granular flow simulation with distinct spatial partitioning.
+- objects: The scene contains numerous small, spherical particles in shades of green, blue, and yellow. Larger, irregularly shaped blobs in purple, pink, and blue are concentrated in the lower half of the frame. A prominent horizontal structure made of orange, pill-shaped bodies forms a porous membrane or barrier across the center. Several large, red, elongated particles are embedded within or attached to the orange barrier.
+

@@ -1,0 +1,207 @@
+general:
+  name: exp01_armadillo_cut_v3
+  seed: 0
+  n_frames: 240
+  dt: 0.016666666666666666
+  boundary: wall
+  dim: 3
+  world:
+  - 0.5
+  - 0.5
+  - 0.5
+  save_data: true
+  units:
+    length_um: 1000000.0
+    time_s: 1.0
+    force_nN: 1000000000.0
+  obstacles:
+  - - 0.16999999999999998
+    - 0.0
+    - 0.16999999999999998
+    - 0.33
+    - 0.13
+    - 0.33
+sets:
+  cell:
+    n: 1
+    start:
+    - - 0.25
+      - 0.26
+      - 0.25
+    types:
+      body:
+        fraction: 1.0
+        material: elastic
+        youngs: 20000.0
+        density: 1000.0
+        shape: obj
+        obj: armadillo
+  mpm_particle:
+    parent: cell
+    per_parent: 600000
+    radius: 0.5
+    density: 1000.0
+    particle_mass: 2.0120295438966535e-06
+  ball_l_c:
+    n: 1
+    start:
+    - - 0.1458712088667411
+      - 0.3276
+      - 0.21231963227081366
+    types:
+      steel:
+        fraction: 1.0
+        material: elastic
+        youngs: 1000000.0
+        density: 8000.0
+        shape: ball
+  ball_l_pt:
+    parent: ball_l_c
+    per_parent: 20000
+    radius: 0.035
+    density: 8000.0
+    particle_mass: 7.183775201208662e-05
+  ball_r_c:
+    n: 1
+    start:
+    - - 0.3541287911332589
+      - 0.3458
+      - 0.19843739152848183
+    types:
+      steel:
+        fraction: 1.0
+        material: elastic
+        youngs: 1000000.0
+        density: 8000.0
+        shape: ball
+  ball_r_pt:
+    parent: ball_r_c
+    per_parent: 20000
+    radius: 0.035
+    density: 8000.0
+    particle_mass: 7.183775201208662e-05
+fields:
+  mpm_grid:
+    frame: mpm_grid
+    n_grid: 192
+operators:
+- op: gravity
+  at: cell
+  g: 9.81
+- op: mpm_anchor
+  at: mpm_particle
+  k: 4000.0
+  applies_to: band
+  band:
+  - 1
+  - 0.0
+  - 0.17
+- op: mpm_strain
+  at: mpm_particle
+  implementation: warp
+- op: mpm_viscosity
+  at: mpm_particle
+  eta: 1.0
+  liquid_only: false
+- op: mpm_scatter
+  at: mpm_grid
+  from: mpm_particle
+  drag: 0.0
+  a_max: 200.0
+  implementation: warp
+  polar: higham
+- op: mpm_grid_update
+  at: mpm_grid
+  wall_damp: 0.3
+  cell_surface_tension: 0.0
+  wall_friction: 0.8
+- op: mpm_rigid_body
+  at: ball_l_pt
+  from: mpm_grid
+  velocity:
+  - 0.0
+  - 0.0
+  - 0.0
+  mass: 1000.0
+  contact: stick
+- op: mpm_rigid_body
+  at: ball_r_pt
+  from: mpm_grid
+  velocity:
+  - 0.0
+  - 0.0
+  - 0.0
+  mass: 1000.0
+  contact: stick
+- op: mpm_gather
+  at: mpm_particle
+  from: mpm_grid
+  wall_damp: 0.3
+  vmax: 1000000000.0
+  implementation: warp
+- op: mpm_tear
+  model: cut
+  at: mpm_particle
+  axis: 0
+  thickness: 0.0052
+  within:
+  - 0.0
+  - 0.247
+  - 0.0
+  - 0.5
+  - 0.41000000000000003
+  - 0.5
+  after_frame: 60
+  before_frame: 61
+  plane_at: 0.25
+- op: mpm_tear
+  model: cut
+  at: mpm_particle
+  axis: 1
+  thickness: 0.0052
+  after_frame: 120
+  before_frame: 121
+  plane_at: 0.247
+schedule:
+- gravity
+- mpm_tear
+- mpm_tear
+- substep_dt: 8.818342e-05
+  steps:
+  - mpm_anchor
+  - mpm_strain
+  - mpm_viscosity
+  - mpm_scatter
+  - mpm_grid_update
+  - mpm_rigid_body
+  - mpm_rigid_body
+  - mpm_gather
+plotting:
+  renderer: vtk_points
+  background: '#8d99a6'
+  foreground: white
+  up_axis: 1
+  camera:
+    elev: 8
+    azim: -90
+  zoom: 1.6
+  box_frame: false
+  hide_sets:
+  - cell
+  - ball_l_c
+  - ball_r_c
+  render_3d: dots
+  dot_size: 1.0
+  duration_s: 10
+  slow_motion: 1
+  colors:
+    body:
+    - 0.35
+    - 0.55
+    - 0.3
+  also_sets:
+  - ball_l_pt
+  - ball_r_pt
+  also_colors:
+    ball_l_pt: '#c8ccd4'
+    ball_r_pt: '#c8ccd4'

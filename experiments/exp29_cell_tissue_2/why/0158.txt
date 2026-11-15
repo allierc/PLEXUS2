@@ -1,0 +1,4 @@
+time   2026-11-13 07:58:08
+run    tissue/mpm_s27_r3a_bond_springs_bond_stiffness_2 (full)
+drawn  the first stored rows of the run
+why    THE WHOLE SPHERE, red and blue, no cross section: bond_springs.bond_stiffness = ('x', 2.0); at row 28 (frame 28): median gap of the facing front points 43 nm, mixing 0.519, J 2.188 (the base 2.000)

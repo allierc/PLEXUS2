@@ -1,0 +1,5 @@
+time   2026-11-02 13:19:07
+run    tissue/mpm_grid3x3_overlap_sweep3_p1000 (mpm; ink look, every cell its own colour, by id, tools/exp29_studio.py)
+drawn  126 of 126 stored rows; activator scale 0..1 (99.5th percentile of the whole run)
+insets cells 9 -> 37; activator distribution; cell volume (µm³) mean 1000 -> 1357, y to 2285
+why    OVERLAP SWEEP 3 on the minimal 3 x 3 rig (Cedric, 2026-10-28, 'step 59', twin of step 54 with overlap 1 to 50): the tolerated contact overlap per family, in array order (x fastest, then y): 1, 1.6, 2.7, 4.3, 7.1, 12, 19, 31, 50 (a product of two volume fractions, so every value above about 1 means no contact force at all); contact tension 0, interface width 0.2, everything else as step 54; each family labelled with its overlap (white text), every cell its own colour by id, no cut-away, no activator inset [Redrawn 2026-10-31 for the unified look: every cell its own colour by id in the true flat_ink palette (the renders of 2026-10-28 showed its complement); every family labelled with its overlap value (spec plotting.cell_labels)]  -- RERUN AT 1000 POINTS PER CELL (Cedric, 2026-11-02)

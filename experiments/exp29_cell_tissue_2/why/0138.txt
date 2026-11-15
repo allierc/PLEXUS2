@@ -1,0 +1,4 @@
+time   2026-11-12 22:57:34
+run    tissue/mpm_sphere_twin_4000_step27 (full)
+drawn  the first stored rows of the run
+why    THE WHOLE SPHERE, red and blue, no cross section: the run as it stands (whole run)

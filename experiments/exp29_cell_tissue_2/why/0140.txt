@@ -1,0 +1,4 @@
+time   2026-11-12 22:57:51
+run    tissue/mpm_sphere_twin_4000_step27 (interface)
+drawn  the first stored rows of the run
+why    THE TWO CELLS 20 AND 5 cut through the pair (yellow: tether, white: contact pair): the run as it stands (whole run)

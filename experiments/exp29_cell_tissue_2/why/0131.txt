@@ -1,0 +1,5 @@
+time   2026-11-12 12:10:04
+run    tissue/mpm_sphere_twin_4000 (mpm; ink look, every cell its own colour, by id, tools/exp29_studio.py)
+drawn  100 of 100 stored rows; activator scale 0..1 (99.5th percentile of the whole run)
+insets cells 21 -> 32; cell volume (µm³) mean 1000 -> 1024, y to 1685
+why    THE SAME MOVIE AS THE PREVIOUS STEP AS A CROSS SECTION (Cedric, 2026-11-12): the red cells clipped at the plane through the centre, the half on the camera's side removed; the blue cells are not clipped: drawn whole when the plane reaches them or they lie behind it, left out when they lie wholly on the camera's side; both cell types solid, black ground, frames 1 to 300

@@ -1,0 +1,5 @@
+time   2026-11-12 12:06:46
+run    tissue/mpm_sphere_twin_4000 (mpm; ink look, every cell its own colour, by id, tools/exp29_studio.py)
+drawn  100 of 100 stored rows; activator scale 0..1 (99.5th percentile of the whole run)
+insets cells 21 -> 32; cell volume (µm³) mean 1000 -> 1024, y to 1685
+why    THE 4000-POINT TWIN (spec of step 0128) DRAWN AS SLIDE 28 (Cedric, 2026-11-12): the whole sphere of 20 red cells round one blue cell, 4000 points per cell, on a black ground, both cell types solid (the spec's 0.1 opacity of the blue cell overridden by --type-opacity inner=1), with the insets of the junctions' bound density and of the live cells per type; the insets' axis names at 16 pt instead of 10; the cell count and the time at the top left, no text overlay and nothing at the bottom right; frames 1 to 300 only

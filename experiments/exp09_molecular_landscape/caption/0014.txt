@@ -1,0 +1,4 @@
+- video name: 0014
+- description: The simulation shows a multi-layered molecular structure undergoing subtle structural fluctuations over a period of 200 microseconds. The large purple and red chains maintain their primary horizontal alignment while experiencing minor local displacements. Smaller orange, green, and blue particles occupy the interstitial spaces between the main chains. Throughout the sequence, the overall lattice remains stable with no major phase transitions or large-scale deformations.
+- objects: The scene contains large purple chains composed of interconnected, rounded rectangular units arranged in horizontal rows. Parallel to these are red chains made of smaller, spherical particles that form distinct linear structures. Numerous small orange, green, and blue spheres are scattered throughout the gaps between the primary chains. A scale bar in the bottom left corner indicates a spatial dimension of 20 nanometers.
+

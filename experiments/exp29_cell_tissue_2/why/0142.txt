@@ -1,0 +1,4 @@
+time   2026-11-12 23:35:20
+run    tissue/mpm_s27_base (full)
+drawn  the first stored rows of the run
+why    THE WHOLE SPHERE, red and blue, no cross section: the base (step 27's settings); at row 28 (frame 28): median gap of the facing front points 42 nm, mixing 0.442, J 2.000 (the base 2.000)

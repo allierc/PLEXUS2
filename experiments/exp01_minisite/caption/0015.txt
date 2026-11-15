@@ -1,0 +1,4 @@
+- video name: 0015
+- description: The simulation begins with four white spheres and four humanoid figures standing in a row. A yellow substance is released from the top, falling rapidly and impacting the ground to create a large splash. The impact causes the humanoid figures to deform and collapse into irregular shapes as they interact with the yellow fluid. The white spheres also move and settle into the fluid as the simulation progresses toward the final frame.
+- objects: There are four white spheres that are roughly spherical and approximately 50 mm in diameter. Four humanoid figures are arranged in a horizontal row, colored red, yellow, blue, and green from left to right. The figures are approximately 100 mm tall and possess a complex, multi-limbed topology. A large volume of yellow fluid is introduced from the top of the 500 mm cube simulation space.
+

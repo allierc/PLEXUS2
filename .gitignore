@@ -1,0 +1,37 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+**/.nfs*
+
+# run output: trajectories, movies and logs (`--output_root .` writes here)
+graphs_data/
+log/
+
+# experiment records: the specs, the why notes and the panes are tracked; movies and stills are not
+experiments/*/mp4/
+experiments/*/png/
+experiments/*/data/*.png
+experiments/*/data/*.mp4
+
+# simulation data, except the seed tables the exp09 specs read
+*.npz
+*.npy
+!experiments/exp09_molecular_landscape/data/seed_it*.npz
+
+# drafts the GUI writes from a prompt
+config/studio/
+
+# local VLM weights
+VLLM/gemma-4-12B-it/
+VLLM/*.log
+
+# paper build artefacts
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.synctex*
+paper/*.toc

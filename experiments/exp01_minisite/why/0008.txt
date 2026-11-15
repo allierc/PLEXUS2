@@ -1,0 +1,4 @@
+time   2026-11-06 08:30:42
+spec   exp01_two_balls_visco_r3
+run    graphs_data/si_material/exp01_two_balls_visco_r3
+why    elastic and viscoelastic cubes, smoother again (Cedric): the spec of r2 with the frame dt halved (0.0025 s -> 0.00125 s), 1200 frames (1.5 s), 601 drawn frames at 60 fps instead of 301 at 30 fps (plotting.max_frames 601, fps 60, snap_budget_gb 4), each object circled by its own ink outline (plotting.ink_per_object)

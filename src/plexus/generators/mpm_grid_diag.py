@@ -1,0 +1,413 @@
+"""The MLS-MPM 6-panel grid-diagnostic movie -- ported from MPM_pytorch's grid plotter
+(`MPM_pytorch/generators/graph_data_generator.py`, the `if 'grid' in style:` block).
+
+Panels per frame: objects (particles by type) | C (||affine velocity||) |
+F (||deformation gradient||) | Jp (plastic volume) | stress (||fixed-corotated||) |
+grid momentum (||grid velocity||). None of F/C/Jp/stress/grid live in the generic
+Plexus trajectory (it records only positions + recorded fields), so this RE-RUNS the
+sim with the engine's per-frame hook (`run(..., on_frame=...)`) to snapshot those live
+buffers, recomputes the stress exactly as `p2g` does, then stitches `grid.mp4`.
+
+Self-contained MPM diagnostic: it does not touch the generic engine/trajectory format.
+"""
+from __future__ import annotations
+
+import os
+import glob
+import subprocess
+
+import numpy as np
+import torch
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from matplotlib import colors as mcolors
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
+_BG, _FG = "black", "white"      # dark theme to match the MPM_pytorch grid plots
+
+from plexus.engine import run
+from plexus.plot import _ffmpeg, _draw_obstacles
+
+
+_TYPE_COLORS = [(0.20, 0.55, 0.95), (0.95, 0.30, 0.30), (0.25, 0.75, 0.35),
+                (0.85, 0.65, 0.15), (0.60, 0.35, 0.80)]
+
+
+def _vonmises(sig):
+    """Von Mises of a per-particle Cauchy stress [N,D,D] -- the deviatoric magnitude.
+
+    Why this and not the Frobenius norm of the whole tensor: the fixed-corotated law resists
+    volume change far more stiffly than shape change, so a sheet that is being SHEARED barely
+    moves a volumetric measure while the deviatoric part is large. A norm that mixes the two is
+    dominated by the stiff volumetric term and reads ~nothing on exactly the deformation these
+    recipes produce.
+    """
+    D = sig.shape[-1]
+    eye = torch.eye(D, device=sig.device).expand_as(sig)
+    s = 0.5 * (sig + sig.transpose(-2, -1))                       # symmetric part
+    dev = s - eye * (s.diagonal(dim1=-2, dim2=-1).mean(-1))[:, None, None]
+    return torch.sqrt(1.5 * (dev * dev).sum((-2, -1)).clamp_min(0))
+
+
+def _stress_norm(F, mu, la):
+    """Per-particle ||fixed-corotated stress|| (2*mu*(F-R)F^T + la*J(J-1)I), the same law
+    p2g scatters. R = analytic 2x2 polar rotation in 2D, SVD polar U Vh in 3D.
+
+    THE FALLBACK, NOT THE ANSWER. This re-derives the constitutive law a second time, beside the
+    solver's own, and it is wrong in a way that matters for every ACTIVE recipe: `mpm_scatter`
+    adds the active stress to the tensor it scatters, and this sees only the passive part. So the
+    panel labelled `stress` on an actively contracting sheet was showing the one component of the
+    stress the recipe does not care about. Ask for `store_stress: true` on the scatter and the
+    solver's own Cauchy stress is used instead -- see `_capture`.
+    """
+    D = F.shape[-1]
+    eye = torch.eye(D, device=F.device).expand_as(F)
+    if D == 2:
+        a, b, c, d = F[:, 0, 0], F[:, 0, 1], F[:, 1, 0], F[:, 1, 1]
+        J = a * d - b * c
+        cs, sn = (a + d), (c - b)
+        r = torch.sqrt(cs * cs + sn * sn) + 1e-9
+        cs, sn = cs / r, sn / r
+        R = torch.stack([torch.stack([cs, -sn], -1), torch.stack([sn, cs], -1)], -2)
+    else:
+        J = torch.linalg.det(F)
+        U, S, Vh = torch.linalg.svd(F)
+        U = U.clone(); Vh = Vh.clone()
+        negU = torch.det(U) < 0; U[negU, :, -1] *= -1
+        negV = torch.det(Vh) < 0; Vh[negV, -1, :] *= -1
+        R = U @ Vh
+    stress = 2 * mu[:, None, None] * ((F - R) @ F.transpose(-2, -1)) \
+        + eye * (la * J * (J - 1))[:, None, None]
+    return stress.reshape(F.shape[0], -1).norm(dim=1)
+
+
+def _object_palette(sim):
+    """Per-parent-type RGB palette for the objects panel, from the spec's `plotting.colors`
+    (so a viscoelastic / water / elastic body shows its declared colour). None -> fall back
+    to the generic `_TYPE_COLORS`."""
+    try:
+        from plexus.plot import _typed_palette
+        pstyle = getattr(sim, "plotting", {}) or {}
+        pname = ((getattr(sim, "sets", {}) or {}).get("mpm_particle", {}) or {}).get("parent")
+        return _typed_palette(sim, pname, pstyle)[0] if pname else None
+    except Exception:
+        return None
+
+
+def _obj_scatter(ax, xs, ys, fr, obj_pal):
+    """Draw the objects panel: colour each body by its PARENT material type via the spec
+    palette when available, else by the particle node_type via the generic palette."""
+    pnt = fr.get("pnt")
+    if obj_pal is not None and pnt is not None:
+        for t in np.unique(pnt):
+            m = pnt == t
+            ax.scatter(xs[m], ys[m], s=1, color=obj_pal[int(t) % len(obj_pal)])
+    else:
+        for t in np.unique(fr["nt"]):
+            m = fr["nt"] == t
+            ax.scatter(xs[m], ys[m], s=1, color=_TYPE_COLORS[int(t) % len(_TYPE_COLORS)])
+
+
+def _capture(H, particle_set="mpm_particle", grid_field="mpm_grid"):
+    """Snapshot the live MPM diagnostic arrays from the hierarchy at one frame."""
+    p = H.levels[particle_set]
+    X = p.get("pos").detach().cpu().numpy()
+    nt = (p.node_type.detach().cpu().numpy() if hasattr(p, "node_type")
+          else np.zeros(p.n, dtype=int))
+    F, C = p.F.detach(), p.C.detach()
+    # PREFER THE STRESS THE SOLVER ALREADY CARRIES. mpm_scatter computes the stress every substep
+    # to build the affine momentum matrix; with `store_stress: true` it caches the Cauchy stress to
+    # a per-particle buffer, captured after any active stress and before the dt/p_vol rescale. That
+    # is the material's stress. Re-deriving it here from F is a second implementation of the
+    # constitutive law that cannot see the active part at all.
+    sig = getattr(p, "sigma", None)
+    if sig is not None:
+        stress, stress_kind = _vonmises(sig.detach()).cpu().numpy(), "von Mises of Cauchy"
+    else:
+        stress, stress_kind = _stress_norm(F, p.mu, p.la).cpu().numpy(), "||passive|| from F"
+    rec = {
+        "X": X, "nt": nt,
+        "fnorm": F.reshape(p.n, -1).norm(dim=1).cpu().numpy(),
+        "cnorm": C.reshape(p.n, -1).norm(dim=1).cpu().numpy(),
+        "Jp": (p.Jp.detach().cpu().numpy() if hasattr(p, "Jp") else np.ones(p.n)),
+        "stress": stress, "stress_kind": stress_kind,
+    }
+    # per-particle PARENT TYPE index -> lets the objects panel colour each body by its
+    # material (elastic / viscoelastic / water) via the spec's plotting palette.
+    pname = getattr(p, "parent_name", None)
+    if hasattr(p, "parent") and pname and hasattr(H, "levels") and pname in H.levels \
+            and hasattr(H.levels[pname], "node_type"):
+        par = p.parent.detach().cpu().numpy()
+        cnt = H.levels[pname].node_type.detach().cpu().numpy()
+        rec["pnt"] = cnt[par]
+    else:
+        rec["pnt"] = None
+    g = H.fields[grid_field] if (hasattr(H, "fields") and grid_field in H.fields) else None
+    if g is not None and hasattr(g, "v"):
+        D = X.shape[1]; dx = g.dx
+        if D == 2:
+            nx, ny = g.nx, g.ny
+            gv = g.v.detach().reshape(nx, ny, 2).norm(dim=2).cpu().numpy()
+            xs = (np.arange(nx) + 0.5) * dx; ys = (np.arange(ny) + 0.5) * dx
+            gx, gy = np.meshgrid(xs, ys, indexing="ij")
+            rec["grid"] = (gx[::2, ::2].ravel(), gy[::2, ::2].ravel(), gv[::2, ::2].ravel())
+        else:                                            # 3D: active grid cells (momentum > 0) as a point cloud
+            nx, ny, nz = g.shape
+            gv = g.v.detach().reshape(nx, ny, nz, 3).norm(dim=3).cpu().numpy()
+            s = slice(None, None, 2)
+            xs = (np.arange(nx) + 0.5) * dx; ys = (np.arange(ny) + 0.5) * dx; zs = (np.arange(nz) + 0.5) * dx
+            gx, gy, gz = np.meshgrid(xs, ys, zs, indexing="ij")
+            gx, gy, gz, gvn = gx[s, s, s], gy[s, s, s], gz[s, s, s], gv[s, s, s]
+            m = gvn > 1e-6                               # only active cells (else a dense cube)
+            rec["grid3"] = (gx[m], gy[m], gz[m], gvn[m])
+    return rec
+
+
+def _gamma_for(vals, lo=1.0, hi=99.0, target=0.5):
+    """The colour exponent that puts the MEDIAN of a heavy-tailed quantity at mid-scale.
+
+    Measured on material_active_horizontal, the median of ||C|| sits at 6.9% of its own p1-p99
+    range and the grid momentum's at about 2%, because both are heavy-tailed positive quantities
+    (||C||: median 1.3, p99 17.9, max 84.5). On a linear scale that puts HALF the material in the
+    bottom few per cent of the colormap -- black -- so the panel reads as nothing happening in
+    exactly the region where nearly all of the material is. It is the same defect the stress
+    colouring had, one axis over: the measure was fine and the mapping hid it.
+
+    Returns 1.0 (linear, unchanged) when the median already lands near mid-scale, so a panel that
+    was fine stays fine.
+    """
+    v = np.concatenate([np.asarray(x).ravel() for x in vals])
+    a, b = np.percentile(v, lo), np.percentile(v, hi)
+    if not np.isfinite([a, b]).all() or b - a <= 0:
+        return 1.0
+    f = float(np.clip((np.median(v) - a) / (b - a), 1e-3, 1 - 1e-3))
+    if f > 0.30:                                    # already readable on a linear scale
+        return 1.0
+    return float(np.clip(np.log(target) / np.log(f), 0.15, 1.0))
+
+
+def _is_constant(vals, tol=1e-9):
+    """True when a field does not vary at all -- e.g. Jp in a recipe with no plastic material.
+
+    Worth naming rather than drawing: a uniform panel on a physical colour band looks exactly like
+    a measurement that happens to be flat, and a reader cannot tell it from one that is broken.
+    """
+    v = np.concatenate([np.asarray(x).ravel() for x in vals])
+    return bool(np.nanmax(v) - np.nanmin(v) <= tol)
+
+
+def _rng(vals, lo=1.0, hi=99.0, pad=1e-9):
+    """Robust (percentile) colour range across all captured frames, so the movie does
+    not flicker and is scaled to THIS run (not MPM_pytorch's hard-coded tissue ranges)."""
+    a = np.concatenate([v.ravel() for v in vals]) if vals else np.array([0.0, 1.0])
+    vmin, vmax = np.percentile(a, lo), np.percentile(a, hi)
+    if vmax - vmin < pad:
+        vmax = vmin + pad
+    return float(vmin), float(vmax)
+
+
+def _render3d(frames, grid_dir, sim, cbar, ranges):
+    """3D version of the 6-panel diagnostic: each panel projects the particles with the
+    spec's camera (same `up_axis`/`camera_elev` as the main render) and scatters them,
+    coloured by the panel's scalar; the grid panel scatters the active grid cells. A thin
+    box wireframe frames every panel. Depth-sorted so near points draw on top."""
+    import itertools
+    from plexus.plot import _rot_camera
+    c_lo, c_hi, f_lo, f_hi, s_lo, s_hi, has_grid3, g3_lo, g3_hi = ranges
+    obj_pal = _object_palette(sim)          # per-parent-type spec palette (material colour) or None
+    style = sim.plotting or {}
+    up = int(style.get("up_axis", 2))
+    azim = float(style.get("camera_azim", 0.7))
+    elev = float(style.get("camera_elev", 1.18 if up != 2 else 0.5))
+    ws = np.asarray(getattr(sim, "world_size", [1.0, 1.0, 1.0]), float)
+    box3 = ws[:3] if ws.shape[0] >= 3 else np.array([1.0, 1.0, 1.0])
+    perm = ([a for a in (0, 1, 2) if a != up] + [up]) if up != 2 else [0, 1, 2]
+    bperm = box3[perm]
+
+    def proj(X):                                          # world [N,3] -> screen (sx, sy, depth)
+        Xp = np.asarray(X, float)[:, perm].copy()
+        if up != 2:
+            Xp[:, 2] = bperm[2] - Xp[:, 2]                # mirror so -up points down (matches main render)
+        s, depth = _rot_camera(Xp - 0.5 * bperm[None, :], azim, elev)
+        return s[:, 0], s[:, 1], depth
+
+    span = float(np.linalg.norm(box3)) * 0.55
+    corners = np.array(list(itertools.product([0, 1], repeat=3)), float) * box3[None, :]
+    cedges = [(a, b) for a in range(8) for b in range(a + 1, 8) if bin(a ^ b).count("1") == 1]
+    cfx, cfy, _ = proj(corners)
+
+    def style3(ax, title):
+        ax.set_title(title, color=_FG, fontsize=8)
+        for a, b in cedges:
+            ax.plot([cfx[a], cfx[b]], [cfy[a], cfy[b]], color="0.55", lw=0.4, alpha=0.5, zorder=0)
+        ax.set_xlim(-span, span); ax.set_ylim(-span, span); ax.set_aspect("equal")
+        ax.set_facecolor(_BG); ax.axis("off")
+
+    def panel(sp, title, sx, sy, order, c, cmap, vmin, vmax):
+        ax = plt.subplot(2, 3, sp)
+        sc = ax.scatter(sx[order], sy[order], c=c[order], s=1, cmap=cmap, vmin=vmin, vmax=vmax)
+        style3(ax, title); cbar(ax, sc)
+
+    for i, fr in enumerate(frames):
+        sx, sy, depth = proj(fr["X"]); order = np.argsort(depth)[::-1]
+        plt.figure(figsize=(15, 10), facecolor=_BG)
+        ax = plt.subplot(2, 3, 1)
+        _obj_scatter(ax, sx, sy, fr, obj_pal)
+        style3(ax, "objects"); cbar(ax, None)
+        panel(2, "C (Jacobian of velocity)", sx, sy, order, fr["cnorm"], "viridis", c_lo, c_hi)
+        panel(3, "F (deformation)", sx, sy, order, fr["fnorm"], "coolwarm", f_lo, f_hi)
+        panel(4, "Jp (volume deformation)", sx, sy, order, fr["Jp"], "viridis", 0.75, 1.25)
+        panel(5, f"stress ({fr.get('stress_kind', '?')})", sx, sy, order, fr["stress"], "hot", s_lo, s_hi)
+        ax6 = plt.subplot(2, 3, 6)
+        if has_grid3:
+            gx, gy, gz, gvn = fr["grid3"]
+            gsx, gsy, gdep = proj(np.stack([gx, gy, gz], 1)); go = np.argsort(gdep)[::-1]
+            g3kw = ({"norm": mcolors.PowerNorm(g3_g, vmin=g3_lo, vmax=g3_hi)} if g3_g != 1.0
+                    else {"vmin": g3_lo, "vmax": g3_hi})
+            sc = ax6.scatter(gsx[go], gsy[go], c=gvn[go], s=4, cmap="viridis", **g3kw)
+            style3(ax6, "grid momentum" + (f"   [colour^{g3_g:.2f}]" if g3_g != 1.0 else ""))
+            cbar(ax6, sc)
+        else:
+            style3(ax6, "grid momentum"); cbar(ax6, None)
+        plt.tight_layout()
+        plt.savefig(os.path.join(grid_dir, f"Fig_{i:06d}.png"), dpi=100, facecolor=_BG)
+        plt.close()
+
+
+def generate_grid_movie(sim, data_dir: str, device: str = "cpu", stride: int = 3,
+                        fps: int = 25) -> str | None:
+    """Re-run `sim`, capture the MPM diagnostic buffers every `stride` frames, render the
+    6-panel figure per frame into `<data_dir>/Grid/`, and stitch `<data_dir>/grid.mp4`."""
+    if "mpm_particle" not in sim.sets:
+        print("[grid] no mpm_particle set -- skipping grid diagnostic movie", flush=True)
+        return None
+
+    # honor the spec's plotting.fps + movie_max_frames so grid.mp4 matches the main movies'
+    # duration (frames / fps). budget caps captured frames -> stride set to hit ~budget frames.
+    style = getattr(sim, "plotting", {}) or {}
+    fps = int(style.get("fps", fps))
+    budget = int(style.get("movie_max_frames", 0))
+    if budget > 0:
+        stride = max(stride, int(np.ceil(sim.n_frames / budget)))
+
+    # ASK FOR THE STRESS RATHER THAN RE-DERIVING IT. This diagnostic re-runs the simulation, so it
+    # is the consumer and it can turn on what it needs; requiring every spec to carry a flag for the
+    # benefit of one optional plot is how a diagnostic ends up silently drawing a proxy instead. The
+    # flag is strictly additive (mpm_scatter allocates a buffer and writes it; `sigma` is never read
+    # back by the mechanics), so asking for it cannot change the trajectory this re-run produces.
+    asked = 0
+    for o in getattr(sim, "operators", []) or []:
+        if str(getattr(o, "op", "")).startswith("mpm_scatter"):
+            o.params["store_stress"] = True
+            asked += 1
+    print(f"[grid] store_stress requested on {asked} scatter op(s); "
+          f"{'the solver' if asked else 'a re-derivation from F'} will supply the stress panel",
+          flush=True)
+
+    frames: list[dict] = []
+
+    def hook(H, frame):
+        if frame % stride == 0:
+            frames.append(_capture(H))
+
+    print(f"[grid] re-running {sim.n_frames} frames to capture MPM diagnostics...", flush=True)
+    run(sim, out_path=None, device=device, on_frame=hook)
+    if not frames:
+        return None
+
+    obj_pal = _object_palette(sim)          # per-parent-type spec palette (material colour) or None
+
+    # per-run colour ranges (Jp kept on the physical band, like the reference)
+    c_lo, c_hi = _rng([f["cnorm"] for f in frames])
+    f_lo, f_hi = _rng([f["fnorm"] for f in frames])
+    s_lo, s_hi = _rng([f["stress"] for f in frames])
+    # ...and per-run colour EXPONENTS, so the bulk of each heavy-tailed field is visible
+    c_g = _gamma_for([f["cnorm"] for f in frames])
+    s_g = _gamma_for([f["stress"] for f in frames])
+    jp_flat = _is_constant([f["Jp"] for f in frames])
+    has_grid = "grid" in frames[0]
+    has_grid3 = "grid3" in frames[0]
+    g_lo, g_hi = _rng([f["grid"][2] for f in frames]) if has_grid else (0.0, 1.0)
+    g3_lo, g3_hi = _rng([f["grid3"][3] for f in frames]) if has_grid3 else (0.0, 1.0)
+    g_g = _gamma_for([f["grid"][2] for f in frames]) if has_grid else 1.0
+    g3_g = _gamma_for([f["grid3"][3] for f in frames]) if has_grid3 else 1.0
+    print(f"[grid] colour exponents (1.0 = linear): C {c_g:.2f}  stress {s_g:.2f}  grid "
+          f"{(g_g if has_grid else g3_g):.2f}" + ("   Jp is CONSTANT" if jp_flat else ""),
+          flush=True)
+
+    grid_dir = os.path.join(data_dir, "Grid")
+    os.makedirs(grid_dir, exist_ok=True)
+    for old in glob.glob(os.path.join(grid_dir, "*.png")):
+        os.remove(old)
+
+    obstacles = list(getattr(sim, "obstacles", []) or [])   # wall geometry to overlay (grey)
+
+    def _cbar(ax, sc):
+        # a small (thin + short) colorbar inset just outside the panel's right edge. It
+        # steals no axis width, so all six main axes stay exactly the same size.
+        if sc is None:
+            return
+        cax = inset_axes(ax, width="100%", height="100%", borderpad=0,
+                         bbox_to_anchor=(1.012, 0.30, 0.016, 0.40), bbox_transform=ax.transAxes)
+        cb = plt.colorbar(sc, cax=cax)
+        cb.ax.tick_params(labelsize=5, colors=_FG, length=2, width=0.4, pad=1.0)
+        cb.ax.locator_params(nbins=4)
+        cb.outline.set_edgecolor(_FG); cb.outline.set_linewidth(0.3)
+
+    D = frames[0]["X"].shape[1]
+    if D == 2:
+        def _style(ax, title):
+            ax.set_title(title, color=_FG, fontsize=8)
+            _draw_obstacles(ax, obstacles, color="0.55")   # same grey walls as the particle/cell movies
+            ax.set_xlim(0, 1); ax.set_ylim(0, 1); ax.set_aspect("equal")
+            ax.set_facecolor(_BG); ax.axis("off")          # no boundary box / ticks
+
+        def panel(sp, title, X, c, cmap, vmin, vmax, gamma=1.0):
+            ax = plt.subplot(2, 3, sp)
+            kw = ({"norm": mcolors.PowerNorm(gamma, vmin=vmin, vmax=vmax)} if gamma != 1.0
+                  else {"vmin": vmin, "vmax": vmax})
+            sc = ax.scatter(X[:, 0], X[:, 1], c=c, s=1, cmap=cmap, **kw)
+            _style(ax, title + (f"   [colour^{gamma:.2f}]" if gamma != 1.0 else ""))
+            _cbar(ax, sc)
+
+        for i, fr in enumerate(frames):
+            X = fr["X"]
+            plt.figure(figsize=(15, 10), facecolor=_BG)
+            ax = plt.subplot(2, 3, 1)
+            _obj_scatter(ax, X[:, 0], X[:, 1], fr, obj_pal)
+            _style(ax, "objects"); _cbar(ax, None)         # spacer keeps panel 1 the same size
+            panel(2, "C (Jacobian of velocity)", X, fr["cnorm"], "viridis", c_lo, c_hi, c_g)
+            panel(3, "F (deformation)", X, fr["fnorm"], "coolwarm", f_lo, f_hi)
+            panel(4, "Jp (volume deformation)" + (" -- CONSTANT, no plastic material" if jp_flat
+                                                  else ""),
+                  X, fr["Jp"], "viridis", 0.75, 1.25)
+            panel(5, f"stress ({fr.get('stress_kind', '?')})", X, fr["stress"], "hot",
+                  s_lo, s_hi, s_g)
+            ax6 = plt.subplot(2, 3, 6)
+            if has_grid:
+                gx, gy, gv = fr["grid"]
+                gkw = ({"norm": mcolors.PowerNorm(g_g, vmin=g_lo, vmax=g_hi)} if g_g != 1.0
+                       else {"vmin": g_lo, "vmax": g_hi})
+                sc = ax6.scatter(gx, gy, c=gv, s=4, cmap="viridis", **gkw)
+                _style(ax6, "grid momentum" + (f"   [colour^{g_g:.2f}]" if g_g != 1.0 else ""))
+                _cbar(ax6, sc)
+            else:
+                _style(ax6, "grid momentum"); _cbar(ax6, None)
+            plt.tight_layout()
+            plt.savefig(os.path.join(grid_dir, f"Fig_{i:06d}.png"), dpi=100, facecolor=_BG)
+            plt.close()
+    else:
+        _render3d(frames, grid_dir, sim, _cbar,
+                  (c_lo, c_hi, f_lo, f_hi, s_lo, s_hi, has_grid3, g3_lo, g3_hi))
+
+    out = os.path.join(data_dir, "grid.mp4")
+    ff = _ffmpeg()
+    if ff is None:
+        print(f"[grid] rendered {len(frames)} PNGs -> {grid_dir} (ffmpeg not found; no mp4)", flush=True)
+        return grid_dir
+    subprocess.run([ff, "-y", "-framerate", str(fps), "-i", os.path.join(grid_dir, "Fig_%06d.png"),
+                    "-pix_fmt", "yuv420p", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", out],
+                   check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    print(f"[grid] grid diagnostic movie -> {out} ({len(frames)} frames)", flush=True)
+    return out

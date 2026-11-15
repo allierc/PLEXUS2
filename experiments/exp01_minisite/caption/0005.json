@@ -1,0 +1,12 @@
+{
+  "model": "gemma-4-12B-it",
+  "root": "/workspace/Plexus/experiments/exp01_minisite/mp4",
+  "records": [
+    {
+      "video": "/workspace/Plexus/experiments/exp01_minisite/mp4/0002.mp4",
+      "name": "0002",
+      "description": "The simulation begins with several small cubes scattered throughout a large transparent container. Over time, gravity and collisions cause the cubes to fall toward the bottom of the container. They eventually settle into a pile at the base, interacting and shifting positions as they find a stable configuration. By the final frame, the cubes are clustered together on the floor of the box.",
+      "objects": "The scene contains nine small, individual cubes of varying colors including blue, yellow, pink, green, orange, teal, purple, red, and brown. Each cube is roughly the same size, appearing as small blocks relative to the large bounding box. The cubes are initially disconnected and distributed in 3D space before congregating at the bottom. They maintain their distinct colors and cubic shapes throughout the entire simulation."
+    }
+  ]
+}

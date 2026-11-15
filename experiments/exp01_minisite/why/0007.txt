@@ -1,0 +1,4 @@
+time   2026-10-29 14:30:02
+spec   exp01_three_materials_r2
+run    graphs_data/si_material/exp01_three_materials_r2
+why    water, snow and elastic cubes, smoother (Cedric: twice smaller delta t, twice more frames, fps x 2): the spec of step 2 with the frame dt halved (0.00333 s -> 0.00167 s), 1200 frames (2.0 s), 401 drawn frames at 40 fps (plotting.max_frames 401, fps 40, snap_budget_gb 3)

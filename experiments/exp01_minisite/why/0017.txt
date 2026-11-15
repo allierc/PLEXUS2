@@ -1,0 +1,4 @@
+time   2026-10-30 13:14:17
+spec   exp01_slits_v2
+run    graphs_data/si_material/exp01_slits_v2 (cluster, LSF 155150637)
+why    ParticleGraph wave_slit (the four-slit spec), redone on a finer grid and in new colours (Cedric: finer grid, not white / black / pink): a pulse from the centre (pattern_10) crosses walls with slits (pics_slits: walls of coefficient 0, four columns of wave speed 0.28 to 1.12) on the image's own 256 x 256 nodes, second-order wave equation (beta 0.0655, so the wave crosses the box as fast as on 100 x 100; 8,000 steps of 0.125) with the neighbour exchange at the harmonic mean of the two coefficients, so a wall reflects; displacement drawn on a ramp from cyan through navy to orange and yellow, walls steel blue (the new plotting.field_cmap); run on the gpu_l4 queue

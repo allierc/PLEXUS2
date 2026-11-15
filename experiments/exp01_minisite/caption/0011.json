@@ -1,0 +1,12 @@
+{
+  "model": "gemma-4-12B-it",
+  "root": "/workspace/Plexus/experiments/exp01_minisite/mp4",
+  "records": [
+    {
+      "video": "/workspace/Plexus/experiments/exp01_minisite/mp4/0008.mp4",
+      "name": "0008",
+      "description": "The simulation begins with a perfectly ordered, multi-colored cubic grid of particles. As time progresses, the structured grid rapidly breaks down into a turbulent, chaotic flow of mixed colors. The particles expand and swirl, filling the lower and middle sections of the bounding box with complex fluid-like patterns. By the final frames, the initial structure has completely dissipated into a diffuse, turbulent cloud of particles settling toward the bottom.",
+      "objects": "The primary objects are millions of small, point-like particles contained within a large 1-meter cubic bounding box. Initially, these particles are arranged in a rigid, rectilinear grid of distinct color blocks including red, blue, green, and magenta. As the simulation evolves, the particles lose their geometric arrangement and form irregular, interconnected turbulent structures. The color palette remains consistent throughout, with individual particles retaining their original hues as they mix and move."
+    }
+  ]
+}

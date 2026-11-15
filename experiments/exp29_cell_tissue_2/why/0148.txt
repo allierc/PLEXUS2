@@ -1,0 +1,4 @@
+time   2026-11-12 23:39:53
+run    tissue/mpm_s27_r1a_law_depth_0p5 (interface)
+drawn  the first stored rows of the run
+why    THE TWO CELLS 20 AND 5 cut through the pair (yellow: tether, white: contact pair): attraction_repulsion.depth = ('x', 0.5); at row 28 (frame 28): median gap of the facing front points 45 nm, mixing 0.510, J 2.222 (the base 2.000)

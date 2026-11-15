@@ -1,0 +1,12 @@
+{
+  "model": "gemma-4-12B-it",
+  "root": "/workspace/Plexus/experiments/exp01_minisite/mp4",
+  "records": [
+    {
+      "video": "/workspace/Plexus/experiments/exp01_minisite/mp4/0007.mp4",
+      "name": "0007",
+      "description": "A blue cube of fluid is initially placed on the top of a three-tiered stepped structure. As time progresses, the fluid begins to flow over the edges of the top step and cascades down to the lower levels. The fluid spreads out across the horizontal surfaces while forming thin sheets and streams as it falls between the steps. By the final frames, the fluid has distributed across all three levels, accumulating on the bottom surface.",
+      "objects": "The scene contains a three-tiered stepped structure made of dark grey, rectangular blocks. These blocks are arranged vertically with each successive level being slightly larger than the one above it. A blue fluid mass, initially a cube, is positioned on the uppermost platform. The entire simulation is contained within a transparent bounding box with a base dimension of 50 mm."
+    }
+  ]
+}

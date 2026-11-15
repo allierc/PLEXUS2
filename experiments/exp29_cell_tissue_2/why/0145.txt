@@ -1,0 +1,4 @@
+time   2026-11-12 23:35:39
+run    tissue/mpm_s27_base (graph)
+drawn  the first stored rows of the run
+why    THE CLOSE VIEW, the graph of the points of cells 20 and 5 (a node per point, a yellow edge per tether): the base (step 27's settings); at row 28 (frame 28): median gap of the facing front points 42 nm, mixing 0.442, J 2.000 (the base 2.000)

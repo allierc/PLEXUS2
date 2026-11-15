@@ -1,0 +1,12 @@
+{
+  "model": "gemma-4-12B-it",
+  "root": "/workspace/Plexus/experiments/exp01_minisite/mp4",
+  "records": [
+    {
+      "video": "/workspace/Plexus/experiments/exp01_minisite/mp4/0017.mp4",
+      "name": "0017",
+      "description": "A small, concentrated point of energy begins at the center of a bounded grid. It rapidly expands into a complex, turbulent wave pattern that fills the central chamber. As the simulation progresses, the waves interact with the boundaries, creating interference patterns and secondary ripples. Eventually, the field becomes highly chaotic and saturated, overflowing into the adjacent side chambers.",
+      "objects": "The primary object is a dynamic fluid-like field characterized by intricate, interlocking wave fronts. It features a high-contrast color palette of deep blue and vibrant orange-gold. The field starts as a tiny, circular point and grows into a large, irregular shape that occupies most of the frame. The surrounding environment consists of a static, dark grey grid that defines the spatial boundaries of the simulation."
+    }
+  ]
+}

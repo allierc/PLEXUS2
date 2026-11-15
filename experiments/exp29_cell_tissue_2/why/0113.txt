@@ -1,0 +1,5 @@
+time   2026-11-02 13:29:23
+run    tissue/mpm_sphere1000_sigma_beta (mpm; ink look, every cell its own colour, by id, tools/exp29_studio.py)
+drawn  118 of 118 stored rows; activator scale 0..1 (99.5th percentile of the whole run)
+insets cells 189 -> 431; activator distribution; cell volume (µm³) mean 1000 -> 837.6, y to 1534
+why    SPHERES OF RED CELLS, SWEEP OF BOND STRENGTH (BOND_STRENGTH, THE BELL FORCE SCALE) (Cedric, 2026-11-01): Nine spheres (3 x 3), each one blue inner cell at the centre of a closed one-cell-thick sphere of 20 red cells (125 points per cell); only the blue cell grows (mass doubles every 80 frames = 80 min) and divides at twice its birth mass along its longest axis (division mass spread 0.3, daughter gap 0.3 units) and presses on the shell, which the junction trio holds together. SWEPT in this step, one value per sphere printed over its blue cell: bond_binding: bond strength (bond_strength, the Bell force scale), 0.05 to 30; the others at their defaults  -- RERUN AT 1000 POINTS PER CELL (Cedric, 2026-11-02)

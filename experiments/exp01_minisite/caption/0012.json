@@ -1,0 +1,12 @@
+{
+  "model": "gemma-4-12B-it",
+  "root": "/workspace/Plexus/experiments/exp01_minisite/mp4",
+  "records": [
+    {
+      "video": "/workspace/Plexus/experiments/exp01_minisite/mp4/0009.mp4",
+      "name": "0009",
+      "description": "A green humanoid figure stands on a grey cube and holds two white spheres. The figure then releases the spheres, which float away into the air. As the spheres move, the green figure collapses forward and falls off the side of the cube. The figure remains draped over the edge of the cube while the spheres stay suspended in the background.",
+      "objects": "The scene contains a green humanoid figure with a muscular build and a small tail. Two white spheres with a textured, pitted surface are held by the figure's hands. A large, light grey cube serves as a pedestal for the figure. A scale bar in the bottom right corner indicates a length of 50 mm."
+    }
+  ]
+}

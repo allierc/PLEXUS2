@@ -1,0 +1,92 @@
+experiment: 29
+points: 10
+pass_above: 8
+seeds: [0, 1, 2]
+runs:
+  v_grow_divide: tissue/exp29_v_grow_divide_s{seed}
+  m_grow_divide: tissue/exp29_m_grow_divide_s{seed}
+  v_r021_12: tissue/exp29_v_r021_12_s{seed}
+  m_r021_12: tissue/exp29_m_r021_12_s{seed}
+  v_r005_06: tissue/exp29_v_r005_06_s{seed}
+  m_r005_06: tissue/exp29_m_r005_06_s{seed}
+  v_r013_05: tissue/exp29_v_r013_05_s{seed}
+  m_r013_05: tissue/exp29_m_r013_05_s{seed}
+  v_r016_01: tissue/exp29_v_r016_01_s{seed}
+  m_r016_01: tissue/exp29_m_r016_01_s{seed}
+  v_r017_00_ctrl: tissue/exp29_v_r017_00_ctrl_s{seed}
+  m_r017_00_ctrl: tissue/exp29_m_r017_00_ctrl_s{seed}
+  v_r020_01: tissue/exp29_v_r020_01_s{seed}
+  m_r020_01: tissue/exp29_m_r020_01_s{seed}
+  v_r020_00_ctrl: tissue/exp29_v_r020_00_ctrl_s{seed}
+  m_r020_00_ctrl: tissue/exp29_m_r020_00_ctrl_s{seed}
+  v_r021_06: tissue/exp29_v_r021_06_s{seed}
+  m_r021_06: tissue/exp29_m_r021_06_s{seed}
+  v_tsd_max: tissue/exp29_v_tsd_max_s{seed}
+  m_tsd_max: tissue/exp29_m_tsd_max_s{seed}
+  v_sc_antiphase: tissue/exp29_v_sc_antiphase_s{seed}
+  m_sc_antiphase: tissue/exp29_m_sc_antiphase_s{seed}
+measures:
+  - measure: exp29.health
+    arms: [m_grow_divide, m_r021_12, m_r005_06, m_r013_05, m_r016_01, m_r017_00_ctrl, m_r020_01, m_r020_00_ctrl, m_r021_06, m_tsd_max, m_sc_antiphase]
+  - measure: exp29.compare
+    arms: [v_grow_divide, v_r021_12, v_r005_06, v_r013_05, v_r016_01, v_r017_00_ctrl, v_r020_01, v_r020_00_ctrl, v_r021_06, v_tsd_max, v_sc_antiphase, m_grow_divide, m_r021_12, m_r005_06, m_r013_05, m_r016_01, m_r017_00_ctrl, m_r020_01, m_r020_00_ctrl, m_r021_06, m_tsd_max, m_sc_antiphase]
+gates:
+  - id: G-sanity
+    max: 1.0
+    claim: every MPM twin is intact -- finite values, each cell one piece, the point pool not exhausted
+    value: {min_over_arms: {key: exp29.health.intact, arms: [m_grow_divide, m_r021_12, m_r005_06, m_r013_05, m_r016_01, m_r017_00_ctrl, m_r020_01, m_r020_00_ctrl, m_r021_06, m_tsd_max, m_sc_antiphase]}}
+    full: 1.0
+    zero: 0.0
+    basis: model choice
+    source: "intact = 1 when every float block is finite, at least 95 % of every cell's points are in one piece and the point pool is below 0.9 full; a pool at 1.0 stopped division silently in exp27 bm2"
+  - id: G-number
+    max: 2.0
+    claim: every MPM twin has the vertex twin's NUMBER of cells -- the count over the run, its growth, its births and deaths
+    value: {mean_over_arms: {key: exp29.compare.number_score, arms: [m_grow_divide, m_r021_12, m_r005_06, m_r013_05, m_r016_01, m_r017_00_ctrl, m_r020_01, m_r020_00_ctrl, m_r021_06, m_tsd_max, m_sc_antiphase]}}
+    full: 1.0
+    zero: 4.0
+    basis: reference
+    source: "NUMBER family: count_curve (mean abs ln(N_MPM / N_vertex) over 50 points of the run), ln_ratio = ln(N_end / N_0), doubling_time of the count, births and deaths per cell-frame. gap of a scalar metric = abs(MPM - mean of the vertex seeds) / max(sd of the vertex seeds, 0.10 abs(mean), absolute floor); gap of a curve = the run's mean abs(ln(c / c_vertex)) / the vertex seeds' own; gap of a distribution = Wasserstein-1 of the pooled last-third values over the vertex median / the vertex seeds' own seed-to-seed Wasserstein-1; the family score is the mean over its metrics of min(gap, 6) and a metric that does not apply (activator metrics where the vertex twin has no chemistry) is skipped; references: data/vertex_references.json, bank.<clip>.{scalars,dists,curves}, written by tools/exp29_references.py --bank from the three seeds of tissue/exp29_v_<clip>_s<k>; full 1.0 = within one vertex seed spread, zero 4.0 = four; the 0.10 relative floor, the absolute floors (hole_fraction 0.02, max_hole 0.15, ...) and the caps at 6 are model choices"
+  - id: G-distribution
+    max: 2.0
+    claim: the cells are spread over the sheet as the vertex twin's are -- volume, contact degree, spacing, activator
+    value: {mean_over_arms: {key: exp29.compare.distribution_score, arms: [m_grow_divide, m_r021_12, m_r005_06, m_r013_05, m_r016_01, m_r017_00_ctrl, m_r020_01, m_r020_00_ctrl, m_r021_06, m_tsd_max, m_sc_antiphase]}}
+    full: 1.0
+    zero: 4.0
+    basis: reference
+    source: "DISTRIBUTION family (Wasserstein-1): volume / median volume, contact degree, nearest-neighbour centroid distance / median, activator. gap of a scalar metric = abs(MPM - mean of the vertex seeds) / max(sd of the vertex seeds, 0.10 abs(mean), absolute floor); gap of a curve = the run's mean abs(ln(c / c_vertex)) / the vertex seeds' own; gap of a distribution = Wasserstein-1 of the pooled last-third values over the vertex median / the vertex seeds' own seed-to-seed Wasserstein-1; the family score is the mean over its metrics of min(gap, 6) and a metric that does not apply (activator metrics where the vertex twin has no chemistry) is skipped; references: data/vertex_references.json, bank.<clip>.{scalars,dists,curves}, written by tools/exp29_references.py --bank from the three seeds of tissue/exp29_v_<clip>_s<k>; full 1.0 = within one vertex seed spread, zero 4.0 = four; the 0.10 relative floor, the absolute floors (hole_fraction 0.02, max_hole 0.15, ...) and the caps at 6 are model choices"
+  - id: G-geometry
+    max: 2.5
+    claim: the sheet has the vertex twin's geometry -- radius over time, protrusion, sphericity, and NO HOLES where cells died
+    value: {mean_over_arms: {key: exp29.compare.geometry_score, arms: [m_grow_divide, m_r021_12, m_r005_06, m_r013_05, m_r016_01, m_r017_00_ctrl, m_r020_01, m_r020_00_ctrl, m_r021_06, m_tsd_max, m_sc_antiphase]}}
+    full: 1.0
+    zero: 4.0
+    basis: reference
+    source: "GEOMETRY family: radius_curve, protrusion (95th-percentile over median radius), sphericity (smallest over largest eigenvalue of the centroid covariance), hole_fraction and max_hole (a cell borders a hole when its neighbours leave a gap of 150 degrees; in the family the holes weigh one third, so a twin that leaves holes cannot reach full marks). gap of a scalar metric = abs(MPM - mean of the vertex seeds) / max(sd of the vertex seeds, 0.10 abs(mean), absolute floor); gap of a curve = the run's mean abs(ln(c / c_vertex)) / the vertex seeds' own; gap of a distribution = Wasserstein-1 of the pooled last-third values over the vertex median / the vertex seeds' own seed-to-seed Wasserstein-1; the family score is the mean over its metrics of min(gap, 6) and a metric that does not apply (activator metrics where the vertex twin has no chemistry) is skipped; references: data/vertex_references.json, bank.<clip>.{scalars,dists,curves}, written by tools/exp29_references.py --bank from the three seeds of tissue/exp29_v_<clip>_s<k>; full 1.0 = within one vertex seed spread, zero 4.0 = four; the 0.10 relative floor, the absolute floors (hole_fraction 0.02, max_hole 0.15, ...) and the caps at 6 are model choices"
+  - id: G-organisation
+    max: 2.5
+    claim: the cells are organised as the vertex twin's are -- contact graph, spots, activator-radius correlation, division contrast, death placement
+    value: {mean_over_arms: {key: exp29.compare.organisation_score, arms: [m_grow_divide, m_r021_12, m_r005_06, m_r013_05, m_r016_01, m_r017_00_ctrl, m_r020_01, m_r020_00_ctrl, m_r021_06, m_tsd_max, m_sc_antiphase]}}
+    full: 1.0
+    zero: 4.0
+    basis: reference
+    source: "ORGANISATION family: mean contact degree and clustering coefficient, Moran's I of the activator on the contact graph, activator-high fraction, spots per 100 cells, mean spot size, Spearman(activator, radius), division contrast, share of dead cells low in activator, frames until the sheet's hole_fraction is back within 2 sd of its pre-death value. gap of a scalar metric = abs(MPM - mean of the vertex seeds) / max(sd of the vertex seeds, 0.10 abs(mean), absolute floor); gap of a curve = the run's mean abs(ln(c / c_vertex)) / the vertex seeds' own; gap of a distribution = Wasserstein-1 of the pooled last-third values over the vertex median / the vertex seeds' own seed-to-seed Wasserstein-1; the family score is the mean over its metrics of min(gap, 6) and a metric that does not apply (activator metrics where the vertex twin has no chemistry) is skipped; references: data/vertex_references.json, bank.<clip>.{scalars,dists,curves}, written by tools/exp29_references.py --bank from the three seeds of tissue/exp29_v_<clip>_s<k>; full 1.0 = within one vertex seed spread, zero 4.0 = four; the 0.10 relative floor, the absolute floors (hole_fraction 0.02, max_hole 0.15, ...) and the caps at 6 are model choices"
+caps:
+  - id: not-finite
+    why: a twin whose values leave the finite numbers is a wreck
+    value: {min_over_arms: {key: exp29.health.finite, arms: [m_grow_divide, m_r021_12, m_r005_06, m_r013_05, m_r016_01, m_r017_00_ctrl, m_r020_01, m_r020_00_ctrl, m_r021_06, m_tsd_max, m_sc_antiphase]}}
+    op: lt
+    than: 1.0
+    cap: 2
+  - id: holes
+    why: a twin that leaves holes where cells died (hole_fraction or max_hole more than 6 vertex-seed spreads from the vertex twin's) is not the vertex tissue, whatever else it matches (exp29_t_die, record step 0003, 2026-10-21)
+    value: {max_over_arms: {key: exp29.compare.hole_gap, arms: [m_grow_divide, m_r021_12, m_r005_06, m_r013_05, m_r016_01, m_r017_00_ctrl, m_r020_01, m_r020_00_ctrl, m_r021_06, m_tsd_max, m_sc_antiphase]}}
+    op: gt
+    than: 6.0
+    cap: 4
+  - id: pool-full
+    why: a point pool above 0.98 full silently stops division (exp27 bm2)
+    value: {max_over_arms: {key: exp29.health.pool_fill, arms: [m_grow_divide, m_r021_12, m_r005_06, m_r013_05, m_r016_01, m_r017_00_ctrl, m_r020_01, m_r020_00_ctrl, m_r021_06, m_tsd_max, m_sc_antiphase]}}
+    op: gt
+    than: 0.98
+    cap: 4

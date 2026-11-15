@@ -1,0 +1,70 @@
+general:
+  name: exp01_arbitrary3_v2
+  seed: 3
+  n_frames: 250
+  dt: 0.1
+  boundary: periodic
+  dim: 2
+  world:
+  - 1.0
+  - 1.0
+  save_data: true
+sets:
+  cell:
+    n: 4800
+    types:
+      a:
+        count: 1600
+        p:
+        - 1.6233
+        - 1.0413
+        - 1.6012
+        - 1.5615
+      b:
+        count: 1600
+        p:
+        - 1.7667
+        - 1.8308
+        - 1.0855
+        - 1.9055
+      c:
+        count: 1600
+        p:
+        - 1.7226
+        - 1.785
+        - 1.0584
+        - 1.8579
+    state:
+      pos:
+        width: 2
+        role: coordinate
+        integration: first_order
+        boundary: world
+fields: {}
+operators:
+- op: radius_graph
+  at: cell
+  radius: 0.075
+- op: attraction_repulsion
+  at: cell
+  sigma: 0.005
+schedule:
+- radius_graph
+- attraction_repulsion
+plotting:
+  renderer: mpl2d
+  background: black
+  dot_fill: 0.9
+  trail: 40
+  trail_width: 1.5
+  duration_s: 10
+  movie_look: dots
+  colors:
+    a: '#4c8fd4'
+    b: '#5fb85f'
+    c: '#e08214'
+seed:
+- op: seed_positions
+  at: cell
+  mode: random
+  seed: 3

@@ -1,0 +1,4 @@
+- video name: 0011
+- description: The green humanoid figure remains stationary on a grey pedestal throughout the simulation. The two white spherical objects held in its hands show very minor surface fluctuations but do not move from their positions. The overall scene is static, with no significant evolution of the particles or agents over the recorded frames. The computational metadata in the top left corner shows slight variations in frame numbers and compute times.
+- objects: A green humanoid figure with a textured surface stands in the center of the frame. It holds two large, white, spherical objects that have a porous or bubbly surface texture. The figure is positioned on top of a light grey rectangular pedestal. A scale bar in the bottom right corner indicates a length of 50 mm.
+

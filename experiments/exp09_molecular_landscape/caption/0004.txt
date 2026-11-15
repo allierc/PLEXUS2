@@ -1,0 +1,4 @@
+- video name: 0004
+- description: The simulation shows a dense collection of multi-colored particles moving and interacting within a confined space. Over time, the particles exhibit complex fluid-like dynamics, shifting positions and changing local densities. The distribution of the various shapes remains relatively uniform throughout the duration of the sequence. The overall motion appears stochastic, with no clear global trend or large-scale structural formation.
+- objects: The scene contains several types of rounded, blob-like particles in various sizes. Large purple and pink ellipsoids are scattered throughout the field, often appearing in clusters. Smaller blue and yellow spheres and ovals fill the gaps between the larger bodies. Tiny bright green spheres are distributed evenly, acting as a fine-grained background component.
+

@@ -1,0 +1,125 @@
+general:
+  name: exp05_mpm_v18_r1000
+  seed: 1
+  n_frames: 1000
+  dt: 1.0
+  record_cap: 201
+  boundary: free
+  dim: 3
+  world: [40.0, 40.0, 40.0]
+  units: {length_um: 10.0, time_s: 60.0}
+fields:
+  mpm_grid: {frame: mpm_grid, n_grid: 15, per_parent: cell, cell_box: 3.0}
+sets:
+  cell:
+    n: 20
+    buffer: 1000
+    type_layout: ordered
+    types:
+      cell: {count: 20, shape: ball, material: viscoelastic, youngs: 80.0, tau: 2.0, density: 1.0}
+    state:
+      pos: {width: 3, role: coordinate, integration: coordinate, boundary: world}
+      vel: {width: 3, role: rate, integration: rate, record: false}
+      chem: {width: 1}
+      arr: {width: 1}
+      ij: {width: 2}
+      tone: {width: 1}
+      mass: {width: 1}
+      mass0: {width: 1}
+      born: {width: 1}
+      div_ready: {width: 1}
+  pt:
+    entity: mpm_particle
+    parent: cell
+    per_parent: 125
+    grow_reserve: 160
+    density: 1.0
+    radius: 0.5
+    state:
+      pos: {width: 3, role: coordinate, integration: coordinate, boundary: world}
+      vel: {width: 3, role: rate, integration: rate, record: false}
+      pid: {width: 1}
+      cellc: {width: 1}
+      face: {width: 1}
+  junction:
+    n: 0
+    buffer: 30000
+    state:
+      ca: {width: 1, integration: none}
+      cb: {width: 1, integration: none}
+      fg: {width: 1, integration: none}
+      rho: {width: 1, integration: first_order}
+      area: {width: 1, integration: none}
+      load: {width: 1, integration: none}
+operators:
+- {op: contact_finder, at: junction, points: pt, cells: cell, spacing: 0.2, bond_range: 0.38, implementation: hashgrid}
+- {op: active_force, model: persistent_walk, at: pt, cell_set: cell, f: 0.03, Dr: 0.05, seed: 1}
+- op: pair_potential
+  model: cell_contact
+  at: pt
+  cells: cell
+  repulsion_strength: 600.0
+  contact_slack: 0.2
+  contact_surface_tension:
+  - [-0.1]
+  contact_edge_width: 0.2
+- {op: mpm_strain, at: pt, implementation: default}
+- {op: mpm_scatter, at: mpm_grid, from: pt, drag: 1.0, implementation: default}
+- {op: mpm_grid_update, at: mpm_grid, implementation: warp_pp_balanced, cell_surface_tension: 0.05, csf_rho: 1.0, csf_band: 0.1, csf_smooth: 1, tension_on: all}
+- {op: mpm_gather, at: pt, from: mpm_grid, implementation: default}
+- {op: aggregate_centroid, at: cell, child: pt}
+- {op: cell_cycle, model: mpm, at: cell, rule: doubler_mass, factor: 2.0, factor_cv: 0.1, mark: div_ready, born: born, seed: 1}
+- {op: cell_grow, model: mpm_adhesion, at: cell, points: pt, rate: 0.00231, dims: 3.0, rho: 1.0, contact_gate: junction, tau: 10.0, threshold: 0.15, adh_block: chem}
+- {op: cell_populate, model: mpm, at: cell, points: pt, seat: fill, jitter: 0.3, swell: true, seed: 1}
+- op: cell_divide
+  model: cleave_typed
+  at: cell
+  points: pt
+  yolk_weight: 0.0
+  p_div: 1.0
+  max_per_call: 64
+  mark: div_ready
+  daughter_mark: born
+  inherit: [chem]
+  gap: 0.1
+  seed: 1
+schedule:
+- contact_finder
+- active_force
+- steps: [pair_potential, mpm_strain, mpm_scatter, mpm_grid_update, mpm_gather]
+  substep_dt: 0.01
+  capture: false
+- aggregate_centroid
+- cell_cycle
+- cell_grow
+- cell_populate
+- cell_divide
+seed:
+- op: seed_positions
+  model: packed_ball
+  at: cell
+  spacing: 2.5
+  jitter: 0.2
+  centre: [20.0, 20.0, 20.0]
+  seed: 1
+- {op: seed_positions, model: voronoi_parent, at: pt, reach: 0.62, label: cellc, parent_id: pid, seed: 1}
+plotting:
+  renderer: vtk_points
+  subject: pt
+  cell_colours: id
+  render_3d: contour
+  contour_bodies: {mode: partition, iso: 0.55, sigma: 2.0, reach: 0.25, smooth_method: taubin, smooth: 40, pass_band: 0.02, coat: 0.0}
+  surface_opacity: 1.0
+  surface_roughness: 0.5
+  surface_diffuse: 0.9
+  surface_ambient: 0.25
+  background: '#8d99a6'
+  foreground: white
+  box_frame: false
+  camera: {elev: 20, azim: 30}
+  zoom: 1.6
+  duration_s: 10
+  slow_motion: 1
+  real_time: false
+  curve:
+  - {quantity: 'count:cell', ylabel: cells, xlabel: time (min), ymin: 0, ymax: 200}

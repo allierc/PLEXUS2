@@ -1,0 +1,78 @@
+general:
+  name: exp01_slits_v2
+  seed: 3
+  n_frames: 8000
+  dt: 0.125
+  boundary: periodic
+  dim: 2
+  world:
+  - 1.0
+  - 1.0
+  save_data: true
+sets: {}
+fields:
+  u:
+    frame: grid
+    res: 256
+    components: 3
+operators:
+- op: react_diffuse
+  model: wave
+  at: u
+  coefficient_image: input_data/pics_slits.tif
+  beta: 0.06553600000000001
+schedule:
+- react_diffuse
+plotting:
+  renderer: mpl2d
+  background: black
+  duration_s: 10
+  movie_look: dots
+  gamma: 1.0
+  field_range:
+  - - -0.12
+    - 0.12
+  - - -1.0
+    - 1.0
+  - - 0.0
+    - 1.0
+  field_colors:
+    u:
+    - - 1.0
+      - 1.0
+      - 1.0
+    - - 0.0
+      - 0.0
+      - 0.0
+    - - 0.45
+      - 0.55
+      - 0.7
+  field_cmap:
+    u:
+    - - 0.2
+      - 0.9
+      - 0.9
+    - - 0.05
+      - 0.25
+      - 0.6
+    - - 0.02
+      - 0.02
+      - 0.05
+    - - 0.7
+      - 0.3
+      - 0.0
+    - - 1.0
+      - 0.9
+      - 0.4
+seed:
+- op: seed_field
+  at: u
+  image: input_data/pattern_10.tif
+  channel: 0
+  scale: 0.00196078431372549
+- op: seed_field
+  model: mask
+  at: u
+  image: input_data/pics_slits.tif
+  channel: 2
+  at_most: 0.0

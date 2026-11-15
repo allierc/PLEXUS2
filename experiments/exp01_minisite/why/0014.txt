@@ -1,0 +1,4 @@
+time   2026-10-28 15:35:19
+spec   exp01_armadillo_stiff_v1
+run    graphs_data/si_material/exp01_armadillo_stiff_v1
+why    the torn armadillo of step 8 made stiffer so the animal does not break, rung 1 of 3 (Cedric: variants of movie 8 on local cuda:1, the material changed gradually): the body's Young's modulus 200,000 Pa -> 500,000 Pa and the stretch at which a point is torn (mpm_tear stretch_break, the largest principal stretch, 1.0 = unstretched) 1.6 -> 2.0; everything else as step 8 -- 26 cm armadillo (600,000 points, density 1000) on the pedestal, a 3.5 cm steel sphere gripping each hand moving apart at 0.025 m/s, gravity, 240 frames of 4 s, grid 192^3; the first attempt through the GUI server on cuda:1 died in CUDA graph capture, this one runs as its own process on physical GPU 1

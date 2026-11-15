@@ -1,0 +1,4 @@
+time   2026-11-12 17:15:11
+run    tissue/mpm_sphere_twin_4000_three_stage (tools/spec_interactions.py --movie graph --label-only)
+drawn  118 stored rows
+why    CELLS 20 AND 5 OF THE 4000-POINT TWIN WITH THE THREE ADHESION STAGES, THE MIDDLE PANE OF STEP 0128 (Cedric, 2026-11-12): the graph of the material points of cells 20 and 5 (a node per point, a yellow edge per tether); run tissue/mpm_sphere_twin_4000_three_stage, made by tools/spec_interactions.py --movie graph --cell 20 --neighbour 5 from the run's stored rows; printed: the time and the number of tethers of the pair, nothing else (tools/spec_interactions.py --label-only)

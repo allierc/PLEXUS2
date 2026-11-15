@@ -1,0 +1,5 @@
+time   2026-11-02 13:19:08
+run    tissue/mpm_grid3x3_tension_sweep_p1000 (mpm; ink look, every cell its own colour, by id, tools/exp29_studio.py)
+drawn  126 of 126 stored rows; activator scale 0..1 (99.5th percentile of the whole run)
+insets cells 9 -> 37; activator distribution; cell volume (µm³) mean 1000 -> 1357, y to 2285
+why    CONTACT TENSION SWEEP on the minimal 3 x 3 rig (Cedric, 2026-10-28, 'step 58'): contact overlap 2 for every cell (no overlap repulsion), interface width 0.2, and the contact tension of each family, in array order (x fastest, then y): -1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1 (pair_potential contact_tension_block; the tension of a contact is the mean of its two cells; negative attracts, positive repels); each family labelled with its tension (white text), every cell its own colour by id, no cut-away, no activator inset [Redrawn 2026-10-31 for the unified look: every cell its own colour by id in the true flat_ink palette (the renders of 2026-10-28 showed its complement); every family labelled with its contact_tension value (spec plotting.cell_labels)]  -- RERUN AT 1000 POINTS PER CELL (Cedric, 2026-11-02)

@@ -1,0 +1,4 @@
+time   2026-10-30 11:12:53
+spec   exp01_springs_v2
+run    graphs_data/si_material/exp01_springs_v2 (cluster, LSF 155148762)
+why    ParticleGraph springs_matrix_N100_1, redone (Cedric: dots too big, unzoom, less chaotic, slower, show the trail): the same random symmetric matrix of spring constants (0 to 0.8, zero rest length, no friction) scaled by 0.04 so the motion is five times slower in frequency, the 100 particles start on an even disc of radius 0.15 instead of scattered over the box, small dots, each with a fading trail of its last 10 drawn positions (the new plotting.trail), 3,000 frames of 0.01; run on the gpu_l4 queue

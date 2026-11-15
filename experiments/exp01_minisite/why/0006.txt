@@ -1,0 +1,4 @@
+time   2026-10-29 14:43:00
+spec   exp01_mpm88_r2
+run    graphs_data/si_material/exp01_mpm88_r2
+why    the 88-line MLS-MPM demo, smoother (Cedric): the spec of step 1 on the refactored main with the frame dt halved (0.00333 s -> 0.00167 s), 1200 frames instead of 600 (the same 2.0 s of motion), 401 drawn frames at 40 fps instead of 201 at 20 fps (plotting.max_frames 401, plotting.fps 40, snap_budget_gb 2)

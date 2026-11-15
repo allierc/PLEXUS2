@@ -1,0 +1,4 @@
+- video name: 0002
+- description: The simulation shows a dense collection of multi-colored particles moving and interacting within a confined space. Over time, the particles undergo complex motions, including collisions and slight deformations, while maintaining a relatively uniform distribution. The overall density of the system remains constant as the bodies shift positions and rotate. The video captures the dynamic behavior of a multi-component fluid or granular system at a microscopic scale.
+- objects: The scene contains several types of particles, including large purple, pink, and yellow ellipsoids. There are also numerous smaller blue and teal spherical bodies scattered throughout the volume. Tiny bright green spheres are distributed evenly among the larger components. All objects are packed closely together, exhibiting a disordered, liquid-like arrangement.
+

@@ -1,0 +1,4 @@
+time   2026-10-28 14:03:27
+spec   exp01_waterfall_5m_r1
+run    graphs_data/si_material/exp01_waterfall_5m_r1 (cluster, LSF 155103570)
+why    the 5-million-point waterfall (card 5) redone on the refactored main (74a4b0188, the operator curation merged) to check the refactor changed nothing: the spec of step 5, unchanged except the name (_r1), same seed, run on an A100; the simulation and its movie completed (2400 frames, trajectory 156 GB, byte-identical size to the first run) and LSF then killed the job in the post-run pass at its memory limit, as it did the first run (165 GB there, 343 GB here); compare with step 5

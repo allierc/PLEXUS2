@@ -1,0 +1,4 @@
+time   2026-10-28 13:04:35
+spec   exp01_two_drops_r1
+run    graphs_data/si_material/exp01_two_drops_r1 (cluster gpu_a100, LSF 155103569)
+why    two drops merging (card 4) redone on the refactored main (74a4b0188, the operator curation merged) to check the refactor changed nothing: the spec of step 4, unchanged except the name (_r1), same seed, run on an A100 because the L4 and rtx6000 queues were busy; compare with step 4

@@ -1,0 +1,86 @@
+general:
+  name: exp05_topo_v57
+  seed: 1
+  n_frames: 45000
+  dt: 0.02
+  record_cap: 2001
+  boundary: free
+  dim: 3
+  world: [30.0, 30.0, 30.0]
+  units: {length_um: 10.0, time_s: 600.0}
+sets:
+  cell:
+    n: 20
+    buffer: 10000
+    types:
+      cell: {fraction: 1.0}
+    state:
+      pos: {width: 3, role: coordinate, integration: first_order, boundary: world}
+      size: {width: 1}
+      contacts: {width: 1}
+      founder: {width: 1}
+      chem: {width: 2, integration: first_order}
+      pol_p: {width: 3, integration: first_order}
+      pol_q: {width: 3, integration: first_order}
+fields: {}
+seed:
+- {op: seed_positions, at: cell, mode: ball, radius: 4.0, seed: 1}
+operators:
+- {op: radius_graph, at: cell, radius: 1.1}
+- op: cell_chem_diffuse
+  at: cell
+  implementation: graph_laplacian
+  chi: 1.0
+  d: [1.0, 0.0]
+- op: cell_chem_react
+  at: cell
+  model: aliev_panfilov
+  rate: 1.0
+  k: 8.0
+  a: 0.15
+  eps0: 0.002
+  mu1: 0.2
+  mu2: 0.3
+  stim:
+    times: [50.0, 90.0, 130.0, 170.0, 210.0, 250.0, 290.0, 330.0, 370.0, 410.0, 450.0, 490.0, 530.0, 570.0, 610.0, 650.0, 690.0, 730.0, 770.0, 810.0, 850.0,
+      890.0]
+    duration: 2.0
+    amp: 2.0
+    below: {axis: 2, value: 12.0}
+- {op: thermal_bath, at: cell, kT: 0.005, mobility: 1.0, seed: 1}
+- op: pair_potential
+  implementation: polar_nissen
+  at: cell
+  lambda: [1.0, 0.0, 0.0]
+  spacing: 1.0
+  beta: 5.0
+  mobility: 10.0
+  polarity_rate: 2.0
+  cutoff: 2.0
+  every: 5
+  seed: 1
+  p_init: radial
+  lambda_active: [0.41, 0.5, 0.09]
+  signal_block: chem
+  signal_channel: 0
+  signal_min: 0.5
+- {op: lumen_pressure, implementation: polarity, at: cell, pressure: -0.015, touch: 1.1, min_contacts: 3}
+- {op: cell_divide, implementation: point_adhesion, at: cell, rate: 0.00578, touch: 1.1, min_contacts: 2, offset: 0.5, size_cv: 0.1, seed: 1}
+schedule: [radius_graph, cell_chem_diffuse, cell_chem_react, thermal_bath, pair_potential, lumen_pressure, cell_divide]
+plotting:
+  renderer: vtk_points
+  subject: cell
+  dot_radius: {cell: 0.5}
+  glyphs_only: true
+  background: '#8d99a6'
+  foreground: white
+  box_frame: false
+  camera: {elev: 10, azim: 30}
+  zoom: 1.6
+  duration_s: 10
+  slow_motion: 1
+  real_time: false
+  curve_time: {per_frame_s: 0.0033333, unit: s}
+  curve:
+  - {quantity: 'count:cell', ylabel: cells, xlabel: time (h), ymin: 0}
+  colors: {cell: '#4D96FF'}

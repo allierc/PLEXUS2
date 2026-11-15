@@ -1,0 +1,5 @@
+time   2026-11-01 18:40:52
+run    tissue/mpm_nucleus_stiffness (mpm; ink look, every cell its own colour, by id, tools/exp29_studio.py)
+drawn  126 of 126 stored rows; activator scale 0..1 (99.5th percentile of the whole run)
+insets cells 9 -> 37; cell volume (µm³) mean 1000 -> 1357, y to 2285
+why    CELL DIVISION WITH NUCLEI, SWEEP OF THE NUCLEUS STIFFNESS (Cedric, 2026-11-01): Nine MPM cells 4 length units (40 um) apart, every cell 1000 material points of which 400 are its nucleus (the innermost 0.4 of its points, cell_nucleus[innermost]); each cell grows (mass doubles every 100 frames = 100 min) and divides twice; the nucleus grows with the cell and every division gives each daughter its own nucleus at its own centre. SWEPT, one value per cell printed over it: the nucleus's stiffness over the cytoplasm's (the cell's Young's modulus is 20), 1 to 20. Cells translucent, nuclei blue

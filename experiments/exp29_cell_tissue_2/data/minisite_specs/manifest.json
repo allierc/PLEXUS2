@@ -1,0 +1,82 @@
+{
+ "source": "index.qmd, section 'Pattern and growth composed'",
+ "clips": [
+  {
+   "name": "grow_divide",
+   "label": "grow and divide, no chemistry",
+   "video": "gallery/turing_grow_divide_v4.mp4",
+   "caption": "2,000 \u2192 25,079 cells. Growth and division (structural) beside mechanics (lateral) and edge flips (rewire). A sphere that stays a sphere.",
+   "comp_hash": null
+  },
+  {
+   "name": "r021_12",
+   "label": "the Turing activities added",
+   "video": "gallery/turing_coral_v4.mp4",
+   "caption": "Diffusion and reaction now run on the cell graph that division keeps rewiring. Stripes ride a growing shell.",
+   "comp_hash": null
+  },
+  {
+   "name": "r005_06",
+   "label": "chemistry gates growth",
+   "video": "gallery/turing_morphogen_v6.mp4",
+   "caption": "One exchange ties the reaction to curvature, and the activator gates <code>cell_grow</code>. Arms where the activator sits.",
+   "comp_hash": "C6959d539c0f"
+  },
+  {
+   "name": "r013_05",
+   "label": "an interface tension added",
+   "video": "gallery/turing_flower_v3.mp4",
+   "caption": "One more lateral, <code>interface_tension</code>, at the activator sites. 12,201 cells; eight arms.",
+   "comp_hash": "Cec78a828e4a"
+  },
+  {
+   "name": "r016_01",
+   "label": "one constant halved",
+   "video": "gallery/turing_lobes_v3.mp4",
+   "caption": "The kill rate <code>kk: 0.062 \u2192 0.031</code>, and the reaction rate with it. Lobes and branches instead of arms.",
+   "comp_hash": "Cec78a828e4a"
+  },
+  {
+   "name": "r017_00_ctrl",
+   "label": "the tension removed",
+   "video": "gallery/turing_noline_v3.mp4",
+   "caption": "Same chemistry, <code>interface_tension</code> deleted from the schedule. Growth alone: the longest arms.",
+   "comp_hash": "Cb1d43f47b83"
+  },
+  {
+   "name": "r020_01",
+   "label": "reaction faster than growth",
+   "video": "gallery/turing_folds_v3.mp4",
+   "caption": "The reaction rate <code>rate: 0.25 \u2192 0.75</code>. The shell folds instead of arming.",
+   "comp_hash": "Cb1d43f47b83"
+  },
+  {
+   "name": "r020_00_ctrl",
+   "label": "the tension put back",
+   "video": "gallery/turing_arms_r020ctrl.mp4",
+   "caption": "<code>interface_tension</code> restored, reaction at 0.5. Thirteen arms.",
+   "comp_hash": "C37faf0d5d06"
+  },
+  {
+   "name": "r021_06",
+   "label": "growth faster than reaction",
+   "video": "gallery/turing_spikes_v3.mp4",
+   "caption": "<code>cell_grow</code> rate doubled, reaction at 0.25. Five long thin arms.",
+   "comp_hash": "Cb1d43f47b83"
+  },
+  {
+   "name": "tsd_max",
+   "label": "a second chemistry drives death",
+   "video": "gallery/turing_death_v5.mp4",
+   "caption": "Four chemical states: species A gates growth, species B gates <code>cell_die</code>. Growth and death land in different places.",
+   "comp_hash": null
+  },
+  {
+   "name": "sc_antiphase",
+   "label": "one chemistry drives both",
+   "video": "gallery/turing_antiphase_v5.mp4",
+   "caption": "The same activator gates growth where it is high and death where it is low. Death can only fall between the spots.",
+   "comp_hash": null
+  }
+ ]
+}

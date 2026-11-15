@@ -1,0 +1,56 @@
+general:
+  name: exp01_rps_v1
+  seed: 3
+  n_frames: 4000
+  dt: 0.05
+  boundary: periodic
+  dim: 2
+  world:
+  - 1.0
+  - 1.0
+  save_data: true
+sets: {}
+fields:
+  u:
+    frame: grid
+    res: 100
+    components: 3
+operators:
+- op: react_diffuse
+  model: rock_paper_scissors
+  at: u
+  coefficients:
+  - 0.02
+  - 0.02
+  - 0.04
+  - 0.05
+  - 0.03
+  type_map: input_data/pics_quadrants.tif
+  a: 0.6
+schedule:
+- react_diffuse
+plotting:
+  renderer: mpl2d
+  background: black
+  duration_s: 10
+  movie_look: dots
+  gamma: 1.0
+  field_range:
+  - 0.0
+  - 1.0
+  field_colors:
+    u:
+    - - 1.0
+      - 0.0
+      - 0.0
+    - - 0.0
+      - 1.0
+      - 0.0
+    - - 0.0
+      - 0.3
+      - 1.0
+seed:
+- op: seed_field
+  model: simplex
+  at: u
+  seed: 3

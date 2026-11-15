@@ -1,0 +1,236 @@
+general:
+  name: mpm_grid3x3_flatten_pair3_p1000
+  headline: 9 cells, no division, different aspect ratio lambda of the attraction-repulsion spacing (XY vs Z)
+  title: Nine MPM cells 4 length units (40 um) apart; each grows for 150 frames and does NOT divide; contact overlap 2, interface width 0.2, contact tension -0.1; the points of each cell obey the overdamped attraction-repulsion law (attraction_repulsion cell_aniso, returned as a body acceleration of gain 3000, the grid drag makes it a velocity) with the distance measured with z stretched by lambda, so they settle at a constant spacing in XY and lambda times closer in Z at constant volume per point; lambda from 1 to 3 per cell; each cell labelled with its lambda -- 1000 points per cell (Cedric, 2026-11-02)
+  seed: 1
+  n_frames: 150
+  dt: 1.0
+  record_cap: 76
+  boundary: free
+  dim: 3
+  world:
+  - 20.0
+  - 20.0
+  - 20.0
+  units:
+    length_um: 10.0
+    time_s: 60.0
+fields:
+  mpm_grid:
+    frame: mpm_grid
+    n_grid: 15
+    per_parent: cell
+    cell_box: 3.0
+sets:
+  cell:
+    n: 9
+    buffer: 9
+    type_layout: ordered
+    types:
+      epi:
+        count: 9
+        shape: ball
+        material: viscoelastic
+        youngs: 20.0
+        tau: 2.0
+        density: 1.0
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: second_order_coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: second_order_rate
+        record: false
+      arr:
+        width: 1
+      ij:
+        width: 2
+      tone:
+        width: 1
+      mass:
+        width: 1
+      mass0:
+        width: 1
+      born:
+        width: 1
+      div_ready:
+        width: 1
+      aspect:
+        width: 1
+  pt:
+    entity: mpm_particle
+    parent: cell
+    per_parent: 1000
+    grow_reserve: 2400
+    density: 1.0
+    radius: 0.5
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: second_order_coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: second_order_rate
+        record: false
+      pid:
+        width: 1
+      cellc:
+        width: 1
+      face:
+        width: 1
+operators:
+- op: pair_potential
+  model: cell_contact
+  at: pt
+  cells: cell
+  repulsion_strength: 600.0
+  contact_slack: 2.0
+  contact_surface_tension:
+  - - -0.1
+  contact_edge_width: 0.2
+- op: mpm_strain
+  at: pt
+  implementation: polar
+- op: mpm_scatter
+  at: mpm_grid
+  from: pt
+  drag: 1.0
+  implementation: warp_pp
+- op: mpm_grid_update
+  at: mpm_grid
+  implementation: warp_pp_balanced
+  cell_surface_tension: 0.15
+  csf_rho: 1.0
+  csf_band: 0.1
+  csf_smooth: 1
+  tension_on: all
+- op: mpm_gather
+  at: pt
+  from: mpm_grid
+  implementation: warp_pp
+- op: attraction_repulsion
+  implementation: stretched_cohesion
+  at: pt
+  cells: cell
+  rest: 0.2
+  z_stretch_block: aspect
+  axis: 2
+  p:
+  - 1.0
+  - 1.0
+  - 1.0
+  - 2.0
+  sigma: 0.7
+  radius: 1.3
+  gain: 3000.0
+- op: aggregate_centroid
+  at: cell
+  child: pt
+- op: cell_grow
+  model: mpm
+  at: cell
+  points: pt
+  rate: 0.00231
+  dims: 3.0
+  rho: 1.0
+  after_frame: 0
+- op: cell_populate
+  model: mpm
+  at: cell
+  points: pt
+  seat: fill
+  jitter: 0.3
+  swell: true
+  seed: 1
+schedule:
+- steps:
+  - attraction_repulsion
+  - pair_potential
+  - mpm_strain
+  - mpm_scatter
+  - mpm_grid_update
+  - mpm_gather
+  substep_dt: 0.01
+  capture: false
+- aggregate_centroid
+- cell_grow
+- cell_populate
+seed:
+- op: seed_positions
+  model: cell_grid
+  at: pt
+  cell_set: cell
+  centre:
+  - 10.0
+  - 10.0
+  - 10.0
+  side: 1.0
+  point_spacing: 0.1
+  cells:
+  - 3
+  - 3
+  - 1
+  arrays:
+  - 1
+  - 1
+  gap: 4.0
+  live_per_cell: 1000
+  cell_values:
+    block: aspect
+    values:
+    - 1.0
+    - 1.2
+    - 1.4
+    - 1.6
+    - 1.8
+    - 2.0
+    - 2.3
+    - 2.6
+    - 3.0
+plotting:
+  renderer: vtk_points
+  subject: pt
+  cell_colours: id
+  height_panel: true
+  cell_labels:
+    block: aspect
+    value_only: true
+  render_3d: contour
+  contour_bodies:
+    mode: partition
+    iso: 0.55
+    sigma: 2.0
+    reach: 0.25
+    smooth_method: taubin
+    smooth: 40
+    pass_band: 0.02
+    coat: 0.0
+    color_by:
+      block: cellc
+      channel: 0
+      cmap: YlOrBr
+      range:
+      - 0.0
+      - 19.0
+      floor: 0.15
+  surface_opacity: 1.0
+  surface_roughness: 0.5
+  surface_diffuse: 0.9
+  surface_ambient: 0.25
+  background: '#8d99a6'
+  foreground: white
+  box_frame: false
+  camera:
+    elev: 55
+    azim: -60
+  zoom: 1.0
+  duration_s: 10
+  slow_motion: 1
+  point_volume: 0.001

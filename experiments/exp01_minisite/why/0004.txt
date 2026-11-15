@@ -1,0 +1,4 @@
+time   2026-10-29 15:09:56
+spec   exp01_balls9_v3
+run    graphs_data/si_material/exp01_balls9_v3
+why    nine elastic balls bouncing in the box, third version (Cedric: x4 frames, fps x1.5, a little damping): the same nine balls, places, launches and colours, with a little damping (Kelvin-Voigt viscosity eta 10 Pa s so the wobble after each impact decays, restitution about 0.95, and wall_damp 0.999, a light tangential friction at the walls); the frame dt divided by 4 (0.00167 s -> 0.000417 s) and 4800 frames, so the same 2.0 s of motion is sampled four times finer; 1601 drawn frames at 135 fps (plotting.max_frames 1601, fps 135, snap_budget_gb 5) = an 11.9 s movie (fps x1.5 of the 90 fps version, itself x1.5 of the 60 fps one; Cedric); 7 cm balls of 24,000 points, 128^3 grid, record look of step 1

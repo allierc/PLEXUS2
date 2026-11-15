@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plexus"
+version = "0.0.1"
+description = "PLEXUS: a differentiable language for tissue mechanisms -- hierarchical sets, fields and operators."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch",
+    "torch_geometric",
+    "numpy",
+    "pyyaml",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

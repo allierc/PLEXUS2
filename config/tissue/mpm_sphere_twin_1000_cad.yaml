@@ -1,0 +1,331 @@
+general:
+  name: mpm_sphere_twin_1000_cad
+  headline: a sphere of red cells round one blue cell that grows and divides
+  title: 'Step 23 with the cadherin junction: bond_binding[population] weighted by the molecular rig''s bound fraction against the cleft (exp37); Step 23 with the junction one level down: the bond population (bond_binding[population], bond_springs[population]); One blue inner cell at the centre of a closed sphere of 20 red cells (one cell thick), every cell 1000 points; only the blue cell grows (mass doubles every 80 frames = 80 min) and divides at twice its birth mass along its longest axis (division mass spread 0.3, daughter gap 0.3 units) and presses on the shell, which the junction trio holds together (contact_finder, bond_binding, bond_springs at their defaults); left panel the whole sphere, right panel the same frame cut through the middle (the cells on the camera''s side hidden)'
+  seed: 1
+  n_frames: 350
+  dt: 1.0
+  record_cap: 121
+  boundary: free
+  dim: 3
+  world:
+  - 20.0
+  - 20.0
+  - 20.0
+  units:
+    length_um: 10.0
+    time_s: 60.0
+fields:
+  mpm_grid:
+    frame: mpm_grid
+    n_grid: 15
+    per_parent: cell
+    cell_box: 3.0
+sets:
+  cell:
+    n: 21
+    type_layout: ordered
+    types:
+      inner:
+        count: 1
+        shape: ball
+        material: viscoelastic
+        youngs: 20.0
+        tau: 2.0
+        density: 1.0
+      outer:
+        count: 20
+        shape: ball
+        material: viscoelastic
+        youngs: 20.0
+        tau: 2.0
+        density: 1.0
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: second_order_coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: second_order_rate
+        record: false
+      pol:
+        width: 3
+      adh:
+        width: 6
+      arr:
+        width: 1
+      ij:
+        width: 2
+      tone:
+        width: 1
+      lab:
+        width: 1
+      mass:
+        width: 1
+      mass0:
+        width: 1
+      born:
+        width: 1
+      div_ready:
+        width: 1
+      grow:
+        width: 1
+    buffer: 120
+  pt:
+    entity: mpm_particle
+    parent: cell
+    per_parent: 1000
+    grow_reserve: 1600
+    density: 1.0
+    radius: 0.5
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: second_order_coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: second_order_rate
+        record: false
+      pid:
+        width: 1
+      cellc:
+        width: 1
+      face:
+        width: 1
+  junction:
+    n: 0
+    buffer: 16384
+    state:
+      ca:
+        width: 1
+        integration: none
+      cb:
+        width: 1
+        integration: none
+      fg:
+        width: 1
+        integration: none
+      rho:
+        width: 1
+        integration: first_order
+      area:
+        width: 1
+        integration: none
+      load:
+        width: 1
+        integration: none
+  bond:
+    n: 0
+    buffer: 60000
+    state:
+      ia:
+        width: 1
+        integration: none
+      ib:
+        width: 1
+        integration: none
+      row:
+        width: 1
+        integration: none
+      pos:
+        width: 3
+        integration: none
+operators:
+- op: contact_finder
+  at: junction
+  points: pt
+  cells: cell
+  spacing: 0.2
+  bond_range: 0.38
+  implementation: hashgrid
+- op: bond_binding
+  at: junction
+  cells: cell
+  implementation: population
+  binding_rate: 1.0
+  unbinding_rate: 0.01
+  bond_strength: 1.0
+  bell: bond
+  min_area: 0.1
+  type_matrix:
+  - - 1.0
+    - 1.0
+  - - 1.0
+    - 1.0
+  points: pt
+  bond_set: bond
+  spacing: 0.2
+  seed: 1
+  gap_table: experiments/exp29_cell_tissue_2/data/junction_table.json
+  r_open: 0.19
+- op: bond_springs
+  at: pt
+  junctions: junction
+  bond_stiffness: 3.0
+  bond_damping: 0.05
+  spacing: 0.2
+  bond_rest_length: 0.19
+  bond_range: 0.38
+  implementation: population
+- op: pair_potential
+  model: cell_contact
+  at: pt
+  cells: cell
+  repulsion_strength: 600.0
+  contact_slack: 0.3
+  contact_surface_tension:
+  - - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+  contact_edge_width: 0.2
+- op: mpm_strain
+  at: pt
+  implementation: polar
+- op: mpm_scatter
+  at: mpm_grid
+  from: pt
+  drag: 1.0
+  implementation: warp_pp
+- op: mpm_grid_update
+  at: mpm_grid
+  implementation: warp_pp_balanced
+  cell_surface_tension: 0.15
+  csf_rho: 1.0
+  csf_band: 0.1
+  csf_smooth: 1
+  tension_on: all
+- op: mpm_gather
+  at: pt
+  from: mpm_grid
+  implementation: warp_pp
+- op: aggregate_centroid
+  at: cell
+  child: pt
+- op: cell_cycle
+  model: mpm
+  at: cell
+  rule: doubler_mass
+  factor: 2.0
+  factor_cv: 0.3
+  mark: div_ready
+  born: born
+  seed: 1
+- op: cell_grow
+  model: mpm
+  at: cell
+  points: pt
+  rate: 0.0
+  rate_block: grow
+  dims: 3.0
+  rho: 1.0
+  after_frame: 0
+- op: cell_populate
+  model: mpm
+  at: cell
+  points: pt
+  seat: fill
+  jitter: 0.3
+  swell: true
+  seed: 1
+- op: cell_divide
+  model: cleave_typed
+  at: cell
+  points: pt
+  yolk_weight: 0.0
+  p_div: 1.0
+  max_per_call: 4
+  mark: div_ready
+  daughter_mark: born
+  gap: 0.3
+  seed: 1
+schedule:
+- contact_finder
+- bond_binding
+- steps:
+  - bond_springs
+  - pair_potential
+  - mpm_strain
+  - mpm_scatter
+  - mpm_grid_update
+  - mpm_gather
+  substep_dt: 0.01
+  capture: false
+- aggregate_centroid
+- cell_cycle
+- cell_grow
+- cell_populate
+- cell_divide
+seed:
+- op: seed_positions
+  model: vesicle
+  at: pt
+  cell_set: cell
+  centre: &id001
+  - 10.0
+  - 10.0
+  - 10.0
+  spacing: 1.05
+  inner_extent: 0.5
+  outer_extent: 0.5
+  point_spacing: 0.0625
+  live_per_cell: 1000
+  adh: 1.0
+  seed: 1
+  vesicles:
+  - centre: *id001
+    core: true
+    core_radius: 0.62
+    polar: false
+    values:
+      grow: 0.0028881132523331052
+  - centre: *id001
+    polar: false
+plotting:
+  renderer: vtk_points
+  subject: pt
+  cell_colours: type
+  colors:
+    inner: '#3b6fd4'
+    outer: '#e63946'
+  junction_panel: true
+  render_3d: contour
+  contour_bodies:
+    mode: partition
+    iso: 0.55
+    sigma: 2.0
+    reach: 0.25
+    smooth_method: taubin
+    smooth: 40
+    pass_band: 0.02
+    coat: 0.0
+    color_by:
+      block: cellc
+      channel: 0
+      cmap: YlOrBr
+      range:
+      - 0.0
+      - 19.0
+      floor: 0.15
+  surface_opacity: 1.0
+  surface_roughness: 0.5
+  surface_diffuse: 0.9
+  surface_ambient: 0.25
+  background: '#8d99a6'
+  foreground: white
+  box_frame: false
+  camera:
+    elev: 55
+    azim: -60
+  zoom: 1.0
+  duration_s: 10
+  slow_motion: 1
+  surface_iso_frac: 0.3
+  point_volume: 0.001
+  count_panel: by_type

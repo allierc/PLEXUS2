@@ -1,0 +1,262 @@
+general:
+  name: mpm_grid3x3_drive_sweep2_p1000
+  headline: 9 cells, different footprint-drive strength k
+  title: Nine MPM cells 4 length units (40 um) apart; each grows and divides twice; contact overlap 2 (no overlap repulsion), interface width 0.2, contact tension -0.1 for all; a footprint drive (active_force apical_area, exponent 1 = footprint proportional to mass) spreads each cell's points in the array plane, strength k from 100 to 1000 per family; each family labelled with its k -- 1000 points per cell (Cedric, 2026-11-02)
+  seed: 1
+  n_frames: 250
+  dt: 1.0
+  record_cap: 126
+  boundary: free
+  dim: 3
+  world:
+  - 20.0
+  - 20.0
+  - 20.0
+  units:
+    length_um: 10.0
+    time_s: 60.0
+fields:
+  mpm_grid:
+    frame: mpm_grid
+    n_grid: 15
+    per_parent: cell
+    cell_box: 3.0
+sets:
+  cell:
+    n: 9
+    buffer: 44
+    type_layout: ordered
+    types:
+      epi:
+        count: 9
+        shape: ball
+        material: viscoelastic
+        youngs: 20.0
+        tau: 2.0
+        density: 1.0
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: second_order_coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: second_order_rate
+        record: false
+      arr:
+        width: 1
+      ij:
+        width: 2
+      tone:
+        width: 1
+      mass:
+        width: 1
+      mass0:
+        width: 1
+      born:
+        width: 1
+      div_ready:
+        width: 1
+      kdrive:
+        width: 1
+  pt:
+    entity: mpm_particle
+    parent: cell
+    per_parent: 1000
+    grow_reserve: 1600
+    density: 1.0
+    radius: 0.5
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: second_order_coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: second_order_rate
+        record: false
+      pid:
+        width: 1
+      cellc:
+        width: 1
+      face:
+        width: 1
+operators:
+- op: active_force
+  model: footprint_spreading
+  at: pt
+  cell_set: cell
+  centre:
+  - 10.0
+  - 10.0
+  - -1000.0
+  spreading_strength: 0.0
+  spreading_strength_block: kdrive
+  growth_law_exponent: 1.0
+  max_deficit: 1.0
+- op: pair_potential
+  model: cell_contact
+  at: pt
+  cells: cell
+  repulsion_strength: 600.0
+  contact_slack: 2.0
+  contact_surface_tension:
+  - - -0.1
+  contact_edge_width: 0.2
+- op: mpm_strain
+  at: pt
+  implementation: polar
+- op: mpm_scatter
+  at: mpm_grid
+  from: pt
+  drag: 1.0
+  implementation: warp_pp
+- op: mpm_grid_update
+  at: mpm_grid
+  implementation: warp_pp_balanced
+  cell_surface_tension: 0.15
+  csf_rho: 1.0
+  csf_band: 0.1
+  csf_smooth: 1
+  tension_on: all
+- op: mpm_gather
+  at: pt
+  from: mpm_grid
+  implementation: warp_pp
+- op: aggregate_centroid
+  at: cell
+  child: pt
+- op: cell_cycle
+  model: mpm
+  at: cell
+  rule: doubler_mass
+  factor: 2.0
+  factor_cv: 0.1
+  mark: div_ready
+  born: born
+  seed: 1
+- op: cell_grow
+  model: mpm
+  at: cell
+  points: pt
+  rate: 0.00231
+  dims: 3.0
+  rho: 1.0
+  after_frame: 0
+- op: cell_populate
+  model: mpm
+  at: cell
+  points: pt
+  seat: fill
+  jitter: 0.3
+  swell: true
+  seed: 1
+- op: cell_divide
+  model: cleave_tangent
+  at: cell
+  points: pt
+  yolk_weight: 0.0
+  p_div: 1.0
+  max_per_call: 9
+  mark: div_ready
+  daughter_mark: born
+  split: median
+  inherit:
+  - kdrive
+  gap: 0.1
+  centre:
+  - 10.0
+  - 10.0
+  - -1000.0
+  seed: 1
+schedule:
+- steps:
+  - active_force
+  - pair_potential
+  - mpm_strain
+  - mpm_scatter
+  - mpm_grid_update
+  - mpm_gather
+  substep_dt: 0.01
+  capture: false
+- aggregate_centroid
+- cell_cycle
+- cell_grow
+- cell_populate
+- cell_divide
+seed:
+- op: seed_positions
+  model: cell_grid
+  at: pt
+  cell_set: cell
+  centre:
+  - 10.0
+  - 10.0
+  - 10.0
+  side: 1.0
+  point_spacing: 0.1
+  cells:
+  - 3
+  - 3
+  - 1
+  arrays:
+  - 1
+  - 1
+  gap: 4.0
+  live_per_cell: 1000
+  cell_values:
+    block: kdrive
+    values:
+    - 100.0
+    - 200.0
+    - 300.0
+    - 400.0
+    - 500.0
+    - 600.0
+    - 700.0
+    - 850.0
+    - 1000.0
+plotting:
+  renderer: vtk_points
+  subject: pt
+  cell_colours: id
+  height_panel: true
+  cell_labels:
+    block: kdrive
+    value_only: true
+  render_3d: contour
+  contour_bodies:
+    mode: partition
+    iso: 0.55
+    sigma: 2.0
+    reach: 0.25
+    smooth_method: taubin
+    smooth: 40
+    pass_band: 0.02
+    coat: 0.0
+    color_by:
+      block: cellc
+      channel: 0
+      cmap: YlOrBr
+      range:
+      - 0.0
+      - 19.0
+      floor: 0.15
+  surface_opacity: 1.0
+  surface_roughness: 0.5
+  surface_diffuse: 0.9
+  surface_ambient: 0.25
+  background: '#8d99a6'
+  foreground: white
+  box_frame: false
+  camera:
+    elev: 55
+    azim: -60
+  zoom: 1.0
+  duration_s: 10
+  slow_motion: 1
+  point_volume: 0.001

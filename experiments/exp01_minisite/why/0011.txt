@@ -1,0 +1,4 @@
+time   2026-10-27 21:45:42
+spec   exp01_bench_100m_v1
+run    graphs_data/si_material/exp01_bench_100m_v1 (cluster gpu_rtx6000, LSF 155085215)
+why    the 100-million-point bench (si_bench_100m: 27 bodies of 3.7M points each on a 330^3 grid, 2,400 frames) regenerated in the record look -- grey #8d99a6, white text, dots 1.0, movie_look dots -- physics unchanged; Cedric asked for the 1B bench re-rendered, whose run kept only two frames, so the 100M bench re-run on the cluster RTX6000 instead

@@ -1,0 +1,4 @@
+- video name: 0010
+- description: The simulation shows a dense collection of multi-colored particles and irregular shapes undergoing complex motion and interaction. Over the course of 200 microseconds, the bodies shift positions, causing local clusters to reform and break apart. The red particles appear to form a central, somewhat linear chain that fluctuates as the surrounding bodies move. By the final frame, the overall distribution remains highly disordered, showing a dynamic fluid-like state.
+- objects: The scene contains several distinct types of bodies, including small spherical particles and larger, irregular blob-like shapes. The red spheres are relatively uniform in size and tend to cluster in the center of the frame. Large purple and teal blobs are distributed throughout, exhibiting smooth, rounded topologies with varying volumes. Smaller cyan and orange shapes are scattered between the larger bodies, filling the interstitial spaces of the dense mixture.
+

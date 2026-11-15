@@ -1,0 +1,4 @@
+time   2026-10-29 16:02:15
+spec   exp01_boxes9_v2
+run    graphs_data/si_material/exp01_boxes9_v2
+why    nine elastic boxes bouncing in the box, second version (Cedric: more elastic cubes, fps x2.5): the twin of the nine balls of step 13 -- the same scene, nine bodies of the same volume (24,000 points each, a 5.6 cm cube), each its own colour and its own orientation, random places and launch velocities, gravity 9.81, grid 128^3, frame dt 0.000417 s, 4800 frames (2.0 s) -- with the cubes SOFTER and bouncier: Young's modulus 30,000 Pa instead of 200,000 (6.7 times softer, so each impact squashes a box visibly) and Kelvin-Voigt viscosity eta 3 Pa s instead of 10 (less damping); wall_damp 0.999; 1601 drawn frames at 100 fps (plotting.fps 100, x2.5 of the 40 fps base) = a 16 s movie; record look of step 1

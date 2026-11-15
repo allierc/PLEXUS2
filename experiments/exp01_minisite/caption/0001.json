@@ -1,0 +1,12 @@
+{
+  "model": "gemma-4-12B-it",
+  "root": "/workspace/Plexus/experiments/exp01_minisite/mp4",
+  "records": [
+    {
+      "video": "/workspace/Plexus/experiments/exp01_minisite/mp4/0001.mp4",
+      "name": "0001",
+      "description": "The simulation begins with a uniform distribution of small particles scattered across a black background. Over time, these particles begin to cluster together, forming distinct, dense aggregates. As the frames progress, these clusters grow in size and complexity, exhibiting a branching, dendritic structure. By the final frame, the particles have organized into a network of large, star-like formations connected by thin filaments.",
+      "objects": "The scene contains thousands of tiny, spherical particles in three primary colors: blue, green, and orange. Initially, these objects are arranged in a random, non-connected spatial distribution. As the simulation evolves, they form interconnected clusters with a radial, tree-like topology. The final structures consist of large, multi-colored hubs with long, thin spikes extending outward into the surrounding space."
+    }
+  ]
+}

@@ -1,0 +1,238 @@
+general:
+  name: mpm_patch_020
+  headline: two cells in contact at 0.2 um point spacing, the cadherin junction
+  title: Two cubic cells of 10 um, 125,000 material points each (spacing 0.2 um), touching along a face; the junction kept bond by bond, weighted by the cadherin rig's bound fraction against the cleft
+  seed: 1
+  n_frames: 60
+  dt: 1.0
+  record_cap: 61
+  boundary: free
+  dim: 3
+  world:
+  - 6.0
+  - 6.0
+  - 6.0
+  units:
+    length_um: 10.0
+    time_s: 60.0
+fields:
+  mpm_grid:
+    frame: mpm_grid
+    n_grid: 53
+    per_parent: cell
+    cell_box: 1.6
+sets:
+  cell:
+    n: 2
+    type_layout: ordered
+    types:
+      cad:
+        count: 2
+        shape: ball
+        material: viscoelastic
+        youngs: 20.0
+        tau: 2.0
+        density: 1.0
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: second_order_coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: second_order_rate
+        record: false
+      pol:
+        width: 3
+      adh:
+        width: 6
+      arr:
+        width: 1
+      ij:
+        width: 2
+      tone:
+        width: 1
+      pull:
+        width: 3
+  pt:
+    entity: mpm_particle
+    parent: cell
+    per_parent: 125000
+    density: 1.0
+    radius: 0.5
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: second_order_coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: second_order_rate
+        record: false
+      pid:
+        width: 1
+      cellc:
+        width: 1
+      face:
+        width: 1
+  junction:
+    n: 0
+    buffer: 256
+    state:
+      ca:
+        width: 1
+        integration: none
+      cb:
+        width: 1
+        integration: none
+      fg:
+        width: 1
+        integration: none
+      rho:
+        width: 1
+        integration: first_order
+      area:
+        width: 1
+        integration: none
+      load:
+        width: 1
+        integration: none
+  bond:
+    n: 0
+    buffer: 40000
+    state:
+      ia:
+        width: 1
+        integration: none
+      ib:
+        width: 1
+        integration: none
+      row:
+        width: 1
+        integration: none
+      pos:
+        width: 3
+        integration: none
+operators:
+- op: contact_finder
+  at: junction
+  points: pt
+  cells: cell
+  spacing: 0.02
+  bond_range: 0.038
+  implementation: hashgrid
+- op: bond_binding
+  implementation: population
+  at: junction
+  cells: cell
+  points: pt
+  bond_set: bond
+  spacing: 0.02
+  binding_rate: 1.0
+  unbinding_rate: 0.01
+  bond_strength: 1.0
+  bell: bond
+  min_area: 0.001
+  bond_range: 0.038
+  gap_table: experiments/exp29_cell_tissue_2/data/junction_table_smooth.json
+  r_open: 0.019
+  seed: 1
+  type_matrix:
+  - - 1.0
+    - 1.0
+- op: pair_potential
+  model: cell_contact
+  at: pt
+  cells: cell
+  repulsion_strength: 600.0
+  contact_slack: 0.3
+  contact_surface_tension:
+  - - 0.0
+  contact_edge_width: 0.1
+- op: bond_springs
+  implementation: population
+  at: pt
+  junctions: junction
+  bond_stiffness: 3.0
+  bond_damping: 0.05
+  spacing: 0.02
+  bond_rest_length: 0.019
+  bond_range: 0.038
+- op: mpm_strain
+  at: pt
+  implementation: polar
+- op: mpm_scatter
+  at: mpm_grid
+  from: pt
+  drag: 1.0
+  implementation: warp_pp
+- op: mpm_grid_update
+  at: mpm_grid
+  implementation: warp_pp_balanced
+  cell_surface_tension: 0.15
+  csf_rho: 1.0
+  csf_band: 0.1
+  csf_smooth: 1
+  tension_on: all
+- op: mpm_gather
+  at: pt
+  from: mpm_grid
+  implementation: warp_pp
+- op: aggregate_centroid
+  at: cell
+  child: pt
+schedule:
+- contact_finder
+- bond_binding
+- steps:
+  - pair_potential
+  - bond_springs
+  - mpm_strain
+  - mpm_scatter
+  - mpm_grid_update
+  - mpm_gather
+  substep_dt: 0.002
+  capture: false
+- aggregate_centroid
+seed:
+- op: seed_positions
+  model: cell_grid
+  at: pt
+  cell_set: cell
+  centre:
+  - 3.0
+  - 3.0
+  - 3.0
+  side: 1.0
+  point_spacing: 0.02
+  cells:
+  - 2
+  - 1
+  - 1
+  arrays:
+  - 1
+  - 1
+  gap: 0.0
+  live_per_cell: 125000
+  adhesion:
+    LL: 1.0
+plotting:
+  renderer: vtk_points
+  subject: pt
+  cell_colours: id
+  junction_panel: true
+  point_volume: 8.000000000000001e-06
+  surface_iso_frac: 0.3
+  camera:
+    elev: 20
+    azim: -60
+  zoom: 1.0
+  duration_s: 8
+  slow_motion: 1
+  background: '#8d99a6'
+  foreground: white
+  box_frame: false

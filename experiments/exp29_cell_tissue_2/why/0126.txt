@@ -1,0 +1,5 @@
+time   2026-11-02 14:58:53
+run    tissue/mpm_sphere_twin_1000_cad (mpm; ink look, every cell its own colour, by id, tools/exp29_studio.py)
+drawn  118 of 118 stored rows; activator scale 0..1 (99.5th percentile of the whole run)
+insets cells 21 -> 36; activator distribution; cell volume (µm³) mean 1000 -> 1115, y to 1844
+why    STEP 23 WITH THE CADHERIN JUNCTION (Cedric, 2026-11-02): the junction kept bond by bond (bond_binding[population], bond_springs[population]), a pair's binding probability weighted by the molecular rig's bound fraction against the cleft width (exp37: calcium-bound MPM cadherin rods, 44 nm best cleft)

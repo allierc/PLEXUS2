@@ -1,0 +1,4 @@
+time   2026-10-27 22:35:02
+spec   exp01_morph_armadillo_v7
+run    graphs_data/si_material/exp01_morph_armadillo_v7 (plexus.morph on the cluster)
+why    the armadillo morph with the final rollout FIXED (plexus.morph: the 200-frame movie now runs the fit's own physical time, frame dt 0.002 x 20 / 200 s, control increment scaled the same -- before, only the control was divided and the elastic body relaxed 10x longer between increments, which thinned the limbs of steps 11 and 12); recipe as step 12: cow stages 5,000:24 -> 12,500:32 -> 50,000:40 then an optimised 100,000-point stage on grid 40 (60 iterations), 16 control nodes per axis; fit log-mass loss 0.0093, rollout 0.0165 (steps 11 / 12: 0.054 / 0.049); A100 LSF 155090121; engine look, green

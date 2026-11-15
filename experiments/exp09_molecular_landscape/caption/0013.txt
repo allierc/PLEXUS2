@@ -1,0 +1,4 @@
+- video name: 0013
+- description: The simulation shows a complex molecular system evolving over a period of 200 microseconds. The various molecular components, including lipids and proteins, undergo subtle conformational changes and thermal fluctuations. Small green clusters appear to shift slightly within the central membrane region as time progresses. The overall structural integrity of the multi-layered assembly remains stable throughout the entire time sequence.
+- objects: A prominent horizontal chain of large red spheres forms a distinct layer near the top of the frame. Numerous small green spheres are clustered in the center, interspersed between larger pink and yellow protein-like structures. The bottom of the scene features a dense arrangement of blue, teal, and purple irregular shapes mixed with small pink spheres. Orange, disc-like molecules are organized into two parallel horizontal layers that sandwich the central green clusters.
+

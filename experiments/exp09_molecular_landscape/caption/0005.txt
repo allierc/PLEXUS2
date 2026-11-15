@@ -1,0 +1,4 @@
+- video name: 0005
+- description: The simulation shows a dense collection of multi-colored, irregularly shaped particles moving and interacting within a confined space. Over time, the particles undergo constant motion, shifting positions and changing their relative orientations. The distribution of the particles remains relatively uniform throughout the sequence, with no significant clustering or separation. The overall scene captures a dynamic, fluid-like behavior of a complex multi-component system.
+- objects: The scene contains several types of particles, including large purple, pink, and yellow blobs. There are also numerous smaller blue and teal spheres scattered throughout the volume. Tiny bright green spheres are interspersed among the larger bodies, appearing as a fine dust. All objects are disconnected and move independently, creating a heterogeneous mixture of varying sizes and colors.
+

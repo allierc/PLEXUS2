@@ -1,0 +1,12 @@
+{
+  "model": "gemma-4-12B-it",
+  "root": "/workspace/Plexus/experiments/exp01_minisite/mp4",
+  "records": [
+    {
+      "video": "/workspace/Plexus/experiments/exp01_minisite/mp4/0004.mp4",
+      "name": "0004",
+      "description": "Three distinct cubes are initially suspended in a large transparent container. The blue cube rapidly loses its structural integrity and collapses into a fluid-like state on the floor of the container. The white and orange cubes remain structurally stable and stationary throughout the entire simulation. The blue fluid spreads across the bottom surface, eventually forming a thin layer.",
+      "objects": "The scene contains three small cubes of approximately 100 mm in size. One cube is white, one is orange, and one is blue. These three cubes are arranged in a horizontal row near the top of a large, transparent bounding box. The bounding box is a large cube with a side length of 500 mm."
+    }
+  ]
+}

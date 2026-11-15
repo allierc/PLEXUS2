@@ -1,0 +1,4 @@
+- video name: 0008
+- description: The simulation shows a dense collection of multi-colored, blob-like particles moving and interacting within a confined space. Over time, the particles shift positions and change their relative orientations, creating a dynamic, fluid-like motion. The overall distribution of the bodies remains relatively uniform as they jostle against one another. The scene captures a microscopic-scale physical process, likely representing molecular dynamics or a similar granular flow.
+- objects: The scene contains several types of rounded, irregular bodies in various sizes and colors. Large purple and pink blobs dominate the space, appearing as the primary structural components. Smaller blue and yellow spheres and ellipsoids are interspersed throughout the mixture, filling the gaps between the larger bodies. Tiny green spheres are scattered densely across the entire field, acting as a fine-grained background of particles.
+

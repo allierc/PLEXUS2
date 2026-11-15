@@ -1,0 +1,1 @@
+slide 11: Gray-Scott Turing pattern on 4,000 cells (5 dynamics). Run: tissue/composition_gray_scott (was turing2d_gs_kappa).

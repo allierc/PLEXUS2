@@ -1,0 +1,12 @@
+{
+  "model": "gemma-4-12B-it",
+  "root": "/workspace/Plexus/experiments/exp01_minisite/mp4",
+  "records": [
+    {
+      "video": "/workspace/Plexus/experiments/exp01_minisite/mp4/0001.mp4",
+      "name": "0001",
+      "description": "The simulation begins with several colored spheres scattered throughout a large cubic volume. Over time, the spheres move toward the center and bottom of the cube, gradually clustering together. They undergo various collisions and interactions, shifting positions as they settle into a dense group. By the final frame, most of the spheres are packed closely at the base of the container.",
+      "objects": "The scene contains ten distinct spheres of varying colors, including blue, yellow, pink, green, orange, teal, purple, red, and brown. These spheres are roughly equal in size and are initially distributed independently within the 3D space. They are not connected to each other but interact through physical collisions as they move. The spheres are contained within a large, transparent wireframe cube that defines the simulation boundaries."
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "model": "gemma-4-12B-it",
+  "root": "/workspace/Plexus/experiments/exp01_minisite/mp4",
+  "records": [
+    {
+      "video": "/workspace/Plexus/experiments/exp01_minisite/mp4/0003.mp4",
+      "name": "0003",
+      "description": "Three distinct colored blocks begin in a vertically stacked, separated configuration in the center of a large cube. As the simulation progresses, the blocks begin to deform and merge into a single, irregular mass. This mass gradually spreads outward and downward toward the bottom right corner of the container. By the final frames, the merged structure has flattened into a thin, elongated shape resting against the bottom surface.",
+      "objects": "The scene contains three primary objects: a teal block, a yellow block, and a red block. Initially, these objects are small, sharp-edged cubes arranged in a vertical column. As time passes, they lose their cubic topology and fuse into a single, continuous, and highly irregular multi-colored shape. The final object is significantly larger in surface area than the original cubes but much thinner in height."
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "model": "gemma-4-12B-it",
+  "root": "/workspace/Plexus/experiments/exp01_minisite/mp4",
+  "records": [
+    {
+      "video": "/workspace/Plexus/experiments/exp01_minisite/mp4/0018.mp4",
+      "name": "0018",
+      "description": "The simulation begins with a highly disordered, noisy field of small, multicolored pixels. Over time, the noise begins to coalesce into larger, distinct blobs of red, green, and blue. These blobs continue to grow and merge, forming complex, interconnected structures. In the final frames, the field evolves into a highly organized pattern of swirling, spiral-like shapes.",
+      "objects": "The scene contains three primary colors: red, green, and blue. Initially, the objects are tiny, disconnected pixels scattered randomly across the frame. As time progresses, these pixels aggregate into medium-sized, irregular blobs that share boundaries. By the end, the objects are large, continuous, and curvilinear shapes that form a dense, interlocking network."
+    }
+  ]
+}

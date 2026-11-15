@@ -1,0 +1,4 @@
+- video name: 0006
+- description: Two spherical droplets, one orange and one blue, are initially positioned adjacent to each other in the center of a cubic domain. As the simulation progresses, the two droplets begin to merge and deform into an irregular, interconnected shape. The interface between the two colors becomes increasingly complex as they mix and swirl together. By the final frame, the two droplets have coalesced into a single, multi-colored mass with a highly turbulent internal structure.
+- objects: The scene contains two primary spherical droplets located in the center of a large, transparent cube. One droplet is bright orange and the other is a vibrant blue, both appearing to be roughly equal in size. The droplets are initially separate but eventually merge to form a single, complex topological object. A scale bar at the bottom indicates that the droplets are approximately 20 mm in diameter within a 100 mm cubic domain.
+
