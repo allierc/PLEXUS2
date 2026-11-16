@@ -44,7 +44,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # then reads as one story told by two people. `PLEXUS_BUILDER` names the folder, so a new
 # experiment is a new directory rather than a new numbering scheme, and the watcher and the writer
 # read the SAME variable so they cannot drift apart.
-HISTORY = os.environ.get("PLEXUS_BUILDER") or os.path.join(REPO, "builder", "exp_01_memiopsis")
+HISTORY = os.environ.get("PLEXUS_BUILDER") or os.path.join(REPO, "experiments", "exp05_spheroid_from_words")
 # THE JOURNAL LIVES INSIDE THE RECORD, so it is per-experiment by construction. It was a fixed
 # path under log/gui_runs/, which two sessions running at once both appended to -- the watcher on
 # 8826 then showed the cilium campaign's lines interleaved with the bacterium's, and neither

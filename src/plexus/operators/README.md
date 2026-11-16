@@ -1,24 +1,6 @@
-# The operator library
+# Operators
 
-Every operator is a class registered under a NAME (`register_operator("cell_mechanics", ...)`); a spec names it with `op:` and selects a variant with `model:` (a different
-hypothesis under the same contract) or `implementation:` (the same equation computed differently). The modules are grouped by mechanism (see `__init__.py`). The table below
-is generated from the registry.
-
-## Rules the library follows
-
-- **A constant is a tensor unless a kernel reads it.** An operator stores a numeric parameter as a 0-dim float32 tensor on its device, through `self.tunable(params.get("k"), default,
-  tensor=True)`, so the gradient of a rollout reaches it. A float stays a float when a Warp / Triton kernel, numpy, a CPU generator, `torch.full`'s fill value or a Python
-  comparison reads it.
-- **Every class carries the watcher contract**: `title=`, `equation=` (LaTeX between `$$`), `PARAM_ROLES` for every parameter read in `__init__`, `PARAM_UNITS` from one
-  vocabulary (length, area, volume, time, rate, acceleration, velocity, mass, density, force, mass_per_time, stress, viscosity, energy, energy_per_area, fraction, count,
-  dimensionless, frames, angle), `SYMBOLS` naming every symbol of the equation, a `Reference:`, and a header of one sentence, the contract line
-  `<set> -[relation]-> <set>: reads ..., writes ...`, the equation with its symbols, the reference.
-- **No alias on a rename.** A renamed operator's old name raises a dated error (`registry.renamed_operator`) naming the new spelling.
-
-## The names
-
-Columns: the name, its kind, the count of `model:` / `implementation:` variants, its aliases, the title of its default class. 122 names, 10 aliases, 345 classes.
-
+Name, kind, number of `model:` / `implementation:` variants, aliases, title; generated from the registry.
 
 ### adhesion_ops
 

@@ -51,7 +51,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.a
 # then reads as one story told by two people. `PLEXUS_BUILDER` names the folder, so a new
 # experiment is a new directory rather than a new numbering scheme, and the watcher and the writer
 # read the SAME variable so they cannot drift apart.
-HISTORY = os.environ.get("PLEXUS_BUILDER") or os.path.join(REPO, "builder", "exp_01_memiopsis")
+HISTORY = os.environ.get("PLEXUS_BUILDER") or os.path.join(REPO, "experiments", "exp05_spheroid_from_words")
 SHOTS = os.path.join(HISTORY, "png")
 # ONE WATCHER, EVERY RECORD. `PLEXUS_BUILDER` is only the record a page opens on: the page names the record it
 # wants with `rec=<root>/<folder>` on every call (the human, 2026-09-26: "one watcher can toggle between
