@@ -14,7 +14,7 @@
                                                 morph's box is 0.35 wide and its shape 0.14: framed on the box the
                                                 shape is a fifth of the picture)
     config/<group>/<name>.yaml                  the same spec, where the watcher finds a step's spec by name
-    <record>/{spec,png,mp4,why,caption}/NNNN.*  the next step, the movie drawn by tools/view_movie.py
+    <record>/{spec,png,mp4,why}/NNNN.*  the next step, the movie drawn by tools/view_movie.py
 """
 import argparse
 import json
@@ -94,16 +94,11 @@ def main():
     # (vtk_points, dots, the box frame, white overlays) -- the look of every generated step (step 6, the bench), which
     # Cedric asked the morph to share (2026-10-27). view_movie.py drew it through the 3D view instead (ink, shading).
     r = subprocess.run([sys.executable, os.path.join(REPO, "Plexus_Main.py"), "-o", "plot", f"{group}/{name}",
-                        "--device", "cpu", "--no-describe"])
+                        "--device", "cpu"])
     if r.returncode:
         print("-o plot failed", r.returncode); return r.returncode
     shutil.copy(os.path.join(d, "movie.mp4"), os.path.join(REC, "mp4", s + ".mp4"))
     shutil.copy(os.path.join(d, "3d.png"), os.path.join(REC, "png", s + ".png"))
-    sys.path.insert(0, HERE)
-    import gui_drive
-    os.environ["PLEXUS_BUILDER"] = REC
-    gui_drive.HISTORY = REC
-    print((gui_drive.caption(os.path.join(REC, "mp4", s + ".mp4"), index=idx).get("caption") or "")[:300])
     return 0
 
 

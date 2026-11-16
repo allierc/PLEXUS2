@@ -64,8 +64,7 @@ The engine, the operator library, the record viewer and the experiments of the t
 | `experiments/exp05_spheroid_from_words` | a biologist's three-sentence description run step by step: spheroids, signalling, tissue topology | 25-33 |
 
 Each experiment is a record: one numbered step per run, with its spec (`spec/`), the reason it
-was run (`why/`), its movie (`mp4/`) and still (`png/`), and the panes the viewer draws
-(`story/`). The notes `experiments/<name>.md` hold each experiment's decisions and findings.
+was run (`why/`), its movie (`mp4/`) and still (`png/`). The notes `experiments/<name>.md` hold each experiment's decisions and findings.
 Every spec of a record is also in `config/` under the run's name.
 
 | folder | content |
@@ -74,8 +73,6 @@ Every spec of a record is also in `config/` under the run's name.
 | `src/plexus/operators/` | the operator library, its table in `README.md` |
 | `config/` | the specs of every recorded run (`si_material/`, `tissue/`) |
 | `tools/` | the record tools (`gui_drive`, `archive_run`, `view_movie`, `watcher_deck`), the studio renderers (`exp23_studio`, `exp29_studio`, `cell_panels`), and the experiment tools of exp05, exp09 and exp29 |
-| `paper/` | the paper describing the language, `plexus2.pdf` |
-| `VLLM/` | the movie captioning (needs the Gemma weights, not included; a run without them simply has no caption) |
 
 ## Running one
 

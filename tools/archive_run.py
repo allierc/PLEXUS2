@@ -5,7 +5,7 @@ tools/view_movie.py through the watcher's 3D renderer (Cedric, 2026-10-28: "rend
 and used by the watcher render"; the first r1 archive copied the live renderer's dots for specs that ask for the 3D
 look). `plotting.view_3d` picks what the view contours; `movie_look` is read here and in gui_drive, nowhere else.
 
-    PLEXUS_BUILDER=<record> python tools/archive_run.py si_material/<name> --why "..." [--job LSF_ID] [--no-caption]
+    PLEXUS_BUILDER=<record> python tools/archive_run.py si_material/<name> --why "..." [--job LSF_ID]
 """
 import argparse
 import os
@@ -25,7 +25,6 @@ def main():
     ap.add_argument("run", help="<group>/<name> under graphs_data")
     ap.add_argument("--why", required=True)
     ap.add_argument("--job", default="", help="LSF job id, for the why file")
-    ap.add_argument("--no-caption", action="store_true")
     ap.add_argument("--replace", type=int, default=0, help="overwrite this existing step in place instead of appending a new one")
     a = ap.parse_args()
     rec = os.environ["PLEXUS_BUILDER"]
@@ -65,11 +64,6 @@ def main():
                            env=dict(os.environ, PLEXUS_BUILDER=rec))
         if r.returncode:
             print("view_movie failed", r.returncode); return r.returncode
-    if not a.no_caption:
-        sys.path.insert(0, HERE)
-        import gui_drive
-        gui_drive.HISTORY = rec
-        print((gui_drive.caption(os.path.join(rec, "mp4", s + ".mp4"), index=idx).get("caption") or "")[:300])
     return 0
 
 

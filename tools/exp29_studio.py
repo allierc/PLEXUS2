@@ -2,7 +2,7 @@
 of the experiment's record (the watcher at http://127.0.0.1:8863/watch).
 
     python tools/exp29_studio.py <group>/<run> --why "..." [--seconds 10] [--stride n] [--cam elev,azim]
-                                 [--cut] [--no-archive] [--replace N] [--vs RUN2] [--fake-act radial] [--caption] [--out-dir /tmp]
+                                 [--cut] [--no-archive] [--replace N] [--vs RUN2] [--fake-act radial] [--out-dir /tmp]
     python tools/exp29_studio.py log/okuda/r013_05 --why "..."        # a vertex run: any folder holding traj.npz / trajectory.npz
     python tools/exp29_studio.py --self-check
 
@@ -1444,7 +1444,6 @@ def main():
     ap.add_argument("--out-dir", default="/tmp")
     ap.add_argument("--no-archive", action="store_true", help="render to --out-dir only")
     ap.add_argument("--replace", type=int, default=None, help="archive INTO this existing step (its movie, still and why-file are overwritten, no new step is made)")
-    ap.add_argument("--caption", action="store_true", help="caption the movie with the local VLM")
     ap.add_argument("--section-alpha", nargs="*", default=[], metavar="TYPE=OPACITY", help="with --section: the second panel is the whole tissue again, with these cell types at these opacities (outer=0.4), instead of the cross section")
     ap.add_argument("--section", action="store_true", help="two 3-D panels: the whole tissue and the same frame cut through the middle (the cells on the camera's side hidden)")
     ap.add_argument("--vs", default=None, help="a SECOND run: one movie with RUN on the left and --vs on the right, drawn at the same fraction of their runs, one colour scale, shared insets")
@@ -1558,8 +1557,6 @@ def main():
         f.write(f"why    {a.why}\n")
     gd.note(f"  exp29_studio {i:04d}  {a.run}  -- {'REDRAWN IN PLACE: ' if a.replace else ''}{a.why}")
     out = {"index": i, **{k: info[k] for k in ("rows", "drawn", "a_top", "wall_s")}}
-    if a.caption:
-        out["caption"] = gd.caption(gd._path("mp4", i), index=i).get("caption", "")[:800]
     print(out)
 
 

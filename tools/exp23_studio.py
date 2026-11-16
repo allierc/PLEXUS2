@@ -1,7 +1,7 @@
 """exp23 (frog cleavage): the MACRO-PHOTO render of one run, archived as a step of the experiment's record.
 
     PLEXUS_BUILDER=experiments/<record> \\
-        python tools/exp23_studio.py <group>/<run> --why "..." [--seconds 10] [--caption]
+        python tools/exp23_studio.py <group>/<run> --why "..." [--seconds 10]
 
 The live movie colours each cell by ONE value (its mean yolk, `contour_bodies.color_by`), so the 1-cell egg is a
 single tan. The human's two films (experiments/exp23_frog_cleavage/data/reference_sequence/) are a macro photograph:
@@ -735,7 +735,6 @@ if __name__ == "__main__":
     ap.add_argument("--nuclei", action="store_true", help="translucent cells with each cut's nucleus drawn inside")
     ap.add_argument("--overlay", default=None, help="overlay colour (clock, plot, inset frame), e.g. white; default the look's")
     ap.add_argument("--out-dir", default="/tmp", help="where the mp4/png are written (a shared path on the cluster)")
-    ap.add_argument("--caption", action="store_true", help="caption with the local VLM (loads a 12B model on a GPU)")
     ap.add_argument("--ring", nargs="?", const="annulus", default=None, choices=["annulus", "tube", "tube_in"],
                     help="a periodic ribbon (contact_finder period) drawn closed: annulus (in its own plane), tube "
                          "(rolled out of the plane, top layer outside) or tube_in (top layer inside)")
@@ -784,6 +783,4 @@ if __name__ == "__main__":
         f.write(f"why    {a.why}\n")
     gd.note(f"  studio {i:04d}  {a.run}  -- {a.why}")
     out = {"index": i, **info}
-    if a.caption:
-        out["caption"] = gd.caption(gd._path("mp4", i), index=i).get("caption", "")[:800]
     print(out)

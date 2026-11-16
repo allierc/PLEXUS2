@@ -1483,9 +1483,7 @@ def g_watch_state(h, q):
                   shot_mtime=int(os.path.getmtime(f)),
                   shot_age=int(time.time() - os.path.getmtime(f)),
                   why=_read(sidecar(f, "why")), spec=_read(sidecar(f, "spec")),
-                  # THE CAPTION, READ, NOT COMPUTED. The VLM runs once, when the step is archived,
-                  # and writes `caption/NNNN.txt`; the watcher only ever reads it. Computing it here
-                  # would cost a minute of GPU per page load and give a different text each time.
+                  # the step's saved movie description (`caption/NNNN.txt`), when the record carries one
                   caption=_read(sidecar(f, "caption")),
                   mp4=os.path.exists(sidecar(f, "mp4")),
                   mp4_play=_playable(sidecar(f, "mp4")),

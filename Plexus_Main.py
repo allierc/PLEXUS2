@@ -34,7 +34,7 @@ def main():
         # The first step of experiments/exp05_spheroid_from_words: 20 point cells that move, adhere, grow and divide
         # (`--no-viz` keeps the VTK plotter from firing on every frame while stopped on a breakpoint).
         sys.argv += ["-o", "generate", "tissue/exp05_spheroid_v01_f1000",
-                     "--device", "cpu", "--no-viz", "--no-describe", "--force"]
+                     "--device", "cpu", "--no-viz", "--force"]
 
     parser = argparse.ArgumentParser(description="plexus")
     parser.add_argument("-o", "--option", nargs="+", required=True,
@@ -77,10 +77,6 @@ def main():
                         help="dot size in px, or 'auto' to size it to the drawn particles' median "
                              "nearest-neighbour spacing. DEFAULT: the spec's `plotting.dot_size`, "
                              "then auto -- so the size lives in the config, not in the command")
-    parser.add_argument("--no-describe", action="store_true",
-                        help="skip the automatic VLM video description that -o generate runs by default")
-    parser.add_argument("--describe-out", default=None,
-                        help="aggregate description file (default: graphs_data/video_descriptions.txt)")
     args = parser.parse_args()
 
     if args.device.startswith("cuda"):               # fall back to CPU if no GPU is present
@@ -109,7 +105,6 @@ def main():
                  render_n=args.render_n, render_max_frames=args.render_max_frames,
                  real_time=not args.no_real_time, keep_stills=args.keep_stills,
                  render_stills=args.render_stills, render_dot=args.render_dot,
-                 describe=not args.no_describe, describe_out=args.describe_out,
                  grid=args.grid, movie=args.movie, plot=("plot" in task),
                  argv_line=" ".join(sys.argv))
         return

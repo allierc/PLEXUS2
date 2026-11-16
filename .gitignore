@@ -9,11 +9,12 @@ __pycache__/
 graphs_data/
 log/
 
-# experiment records: the specs, the why notes and the panes are tracked; movies and stills are not
+# experiment records: the specs and the why notes are tracked; movies, stills and the panes the viewer draws (story/) are not
 experiments/*/mp4/
 experiments/*/png/
 experiments/*/data/*.png
 experiments/*/data/*.mp4
+experiments/*/story/
 
 # simulation data, except the seed tables the exp09 specs read
 *.npz
@@ -22,16 +23,3 @@ experiments/*/data/*.mp4
 
 # drafts the GUI writes from a prompt
 config/studio/
-
-# local VLM weights
-VLLM/gemma-4-12B-it/
-VLLM/*.log
-
-# paper build artefacts
-paper/*.aux
-paper/*.log
-paper/*.out
-paper/*.fls
-paper/*.fdb_latexmk
-paper/*.synctex*
-paper/*.toc

@@ -16,7 +16,7 @@ What `generate` does, in order, is exactly what `Plexus_Main.main` did for `-o g
   5. the VRAM projection warning for captured runs;
   6. `data_generate` with the live movie shaped by the spec's `plotting:` block (`max_frames`,
      `stills`, `keep_stills`) and the CLI defaults where the spec says nothing;
-  7. a copy of the spec next to the data, the completion markers, and the caption pass.
+  7. a copy of the spec next to the data, the plot pass and the completion markers.
 
 `StopRun` is what a stop button raises inside `on_frame`; `generate` catches it, closes the movie
 and returns what was written so far with `stopped=True`.
@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import os
 import shutil
-import sys
 
 # REPO: The repository root.
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -40,10 +39,11 @@ class StopRun(Exception):
 def generate(config_name: str, *, device: str = "cuda:0", force: bool = False, viz: bool = True,
              render_n="500000000", render_max_frames: int = 300, real_time: bool = True,
              keep_stills: bool = False, render_stills: int = 10, render_dot=None,
-             describe: bool = True, describe_out: str | None = None, grid: bool = False,
+             plot_after: bool = True, grid: bool = False,
              movie: bool = False, plot: bool = False, on_frame=None, argv_line: str | None = None) -> dict:
     """Run one spec through the generate pipeline. Returns {name, pre_folder, data_dir, run_log_dir,
-    spec_path, stopped, frame_ms} -- `frame_ms` is the engine's own per-tick wall clock."""
+    spec_path, stopped, frame_ms} -- `frame_ms` is the engine's own per-tick wall clock. `plot_after`: the plot
+    pass after the run (the recorded trajectory drawn into its movies and figures); the page's RUN button turns it off."""
     import plexus.operators  # noqa: F401  self-register the operator library
     from plexus.schema import load
     from plexus.paths import resolve_config, validate_pre_folder, log_path
@@ -73,7 +73,7 @@ def generate(config_name: str, *, device: str = "cuda:0", force: bool = False, v
     os.makedirs(run_log_dir, exist_ok=True)
     shutil.copy2(yaml_file, os.path.join(run_log_dir, "spec.yaml"))
 
-    describe = describe and viz
+    plot_after = plot_after and viz
     # the mp4 is written by the run itself (a live `on_frame` movie), for runs where reading the trajectory back is impossible (one 100 M-particle frame is 1.2 GB); `plot_dataset` below still renders from recorded data; `viz=False` turns off every renderer
     _dot = (None if render_dot is None else render_dot if render_dot == "auto" else float(render_dot))
     if viz and device.startswith("cuda"):
@@ -113,10 +113,10 @@ def generate(config_name: str, *, device: str = "cuda:0", force: bool = False, v
         shutil.copy2(yaml_file, os.path.join(data_dir, "spec.yaml"))   # co-locate the spec with its data
         _mark(run_log_dir, "_completed_generate", data_dir)
 
-    # render movies if plotting was asked OR describing (the captioner needs the mp4s), but not for the captioner alone when `data_generate` just replayed the trajectory into movie.mp4 (the `plotting.curve` re-render)
-    if viz and not stopped and (plot or (describe and not replayed)):
+    # the plot pass: when plotting was asked, or after every run unless `data_generate` just replayed the trajectory into movie.mp4 (the `plotting.curve` re-render)
+    if viz and not stopped and (plot or (plot_after and not replayed)):
         from plexus.plot import plot_dataset
-        data_dir = plot_dataset(sim, pre_folder, movie=(movie or describe))
+        data_dir = plot_dataset(sim, pre_folder, movie=(movie or plot_after))
         if plot:
             _mark(run_log_dir, "_completed_plot", data_dir)
 
@@ -125,10 +125,6 @@ def generate(config_name: str, *, device: str = "cuda:0", force: bool = False, v
         from plexus.generators.mpm_grid_diag import generate_grid_movie
         generate_grid_movie(sim, data_dir, device=device)
 
-    # caption the freshly rendered movies (default on for -o generate; --no-describe to skip)
-    if describe and not stopped and data_dir:
-        _describe(data_dir, describe_out, device=device)
-        _mark(run_log_dir, "_completed_describe", describe_out or "graphs_data/video_descriptions.txt")
     if not stopped:
         _mark(run_log_dir, "_complete", argv_line or f"plexus.pipeline.generate({config_name!r})")
     return {"name": name, "pre_folder": pre_folder.rstrip("/"), "data_dir": data_dir,
@@ -166,43 +162,6 @@ def _vram_warning(sim, device: str) -> None:
                   f"GiB. If the run stalls at 100% CPU with no output and never prints "
                   f"'substep captured as a CUDA graph', that is why -- set "
                   f"`capture: false` on the spec's substep block.", flush=True)
-
-
-# _describe: Caption this run's movies with the local VLM, appending to the aggregate file -> None.
-def _describe(data_dir: str, out_file: str | None, device: str = "cuda:0") -> None:
-    """Caption this run's movies with the local VLM, appending to the aggregate file.
-    Runs describe_video.py as a subprocess so a missing/broken VLM never breaks a run."""
-    import glob
-    import subprocess
-    from plexus.paths import graphs_data_path
-    gemma = os.environ.get("GEMMA_DIR", os.path.join(REPO, "VLLM", "gemma-4-12B-it"))
-    if not os.path.isdir(gemma):
-        print(f"[describe] skip: no VLM weights at {gemma} (pass --no-describe to silence)", flush=True)
-        return
-    # every mp4 the run wrote, not just `movie_*` (the two-panel view lands as `movie.mp4`, the VTK products as `vtk_*.mp4`): the captioner's business is "what did this run produce"
-    movies = sorted(f for f in glob.glob(os.path.join(data_dir, "*.mp4"))
-                    if not os.path.basename(f).startswith("grid_"))   # the MPM grid diagnostic
-    if not movies:
-        print(f"[describe] no .mp4 in {data_dir} to describe", flush=True)
-        return
-    gd = graphs_data_path()
-    out_file = out_file or os.path.join(gd, "video_descriptions.txt")
-    script = os.path.join(REPO, "VLLM", "describe_video.py")
-    print(f"[describe] captioning {len(movies)} movie(s) -> {out_file}", flush=True)
-    # a caption that did not happen must SAY SO: `check=False` keeps a broken VLM from killing a run, but on its own let an out-of-memory captioner pass for a success
-    before = os.path.getsize(out_file) if os.path.exists(out_file) else 0
-    # no `Loading weights: 100%` progress bar in the log (the captioner is a subprocess, so the switch travels in its environment); `gemma` is resolved against this checkout and tested with `isdir`, and that same path is passed down, so parent and child cannot look in different directories
-    _env = {**os.environ, "HF_HUB_DISABLE_PROGRESS_BARS": "1", "TRANSFORMERS_VERBOSITY": "error",
-            "GEMMA_DIR": gemma}
-    r = subprocess.run([sys.executable, script, *movies, "--root", gd,
-                        "--out", out_file, "--append", "--device", device], check=False, env=_env)
-    after = os.path.getsize(out_file) if os.path.exists(out_file) else 0
-    if r.returncode != 0 or after <= before:
-        print(f"[describe] *** NO CAPTIONS WERE WRITTEN *** (exit {r.returncode}, "
-              f"{out_file} unchanged at {after} bytes). The movies exist and are undescribed.",
-              flush=True)
-    else:
-        print(f"[describe] wrote {after - before} bytes of captions", flush=True)
 
 
 # _mark: Write a marker file (`_complete`, `_completed_plot`) into a run folder.

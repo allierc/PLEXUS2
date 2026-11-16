@@ -6,11 +6,10 @@ This is those calls, wrapped so one command builds a scene, looks at it, runs it
 what the run wrote and reads the engine's own output back. The point is a loop that closes: the
 picture and the log come back here, so a fault is seen rather than reported.
 
-    python tools/gui_drive.py shot   --tab platynereis --form '{"render":"somata"}'
-    python tools/gui_drive.py run    --tab platynereis --form '{...}' --device cuda:0
+    python tools/gui_drive.py shot   --tab bio --form '{...}'
+    python tools/gui_drive.py run    --tab bio --form '{...}' --device cuda:0
     python tools/gui_drive.py status
     python tools/gui_drive.py log    [--tail 60]
-    python tools/gui_drive.py caption --mp4 <path>
 
 Every call prints JSON on stdout, and `shot` prints the PATH of a PNG this session can read.
 """
@@ -52,11 +51,7 @@ HISTORY = os.environ.get("PLEXUS_BUILDER") or os.path.join(REPO, "builder", "exp
 # session could tell which line was its own. One folder per experiment already isolates the four
 # step files; the journal is the fifth thing that has to be there.
 JOURNAL = os.path.join(HISTORY, "journal.txt")
-# THE CAPTION IS THE FIFTH FILE OF A STEP. It was computed on every cycle and written into ONE shared
-# `log/gui_runs/captions.txt`, truncated by the next caption, so nothing tied a description to the
-# step it described and the watcher could not show it at all -- the VLM's reading of a movie, the
-# one reader that can say "the body never moves" without being told what to look for, was the part
-# of each step nobody could see afterwards. It lives beside the other four now, by step number.
+# THE FILES OF A STEP. `caption` holds the movie descriptions the shipped records carry; Plexus2 writes none.
 KINDS = {"png": ".png", "spec": ".yaml", "why": ".txt", "mp4": ".mp4", "caption": ".txt"}
 
 
@@ -260,40 +255,12 @@ def engine_log(name: str, tail: int = 80) -> dict:
     return {"log": p, "lines": len(lines), "tail": lines[-tail:]}
 
 
-def caption(mp4: str, frames: int = 8, index: int | None = None) -> dict:
-    """Ask the local Gemma VLLM what the movie shows. It is the only reader here that can say
-    'the body never moves' without being told what to look for.
-
-    With `index`, the caption is written as that step's `caption/NNNN.txt` -- once, here -- and
-    the watcher reads it from there. `describe_video.py --out` truncates its file on every call, so
-    the step's file holds exactly this movie's description and nothing left over from another."""
-    script = os.path.join(REPO, "VLLM", "describe_video.py")
-    if not os.path.exists(script):
-        return {"error": f"no {script}"}
-    out = (_path("caption", index) if index is not None
-           else os.path.join(REPO, "log", "gui_runs", "captions.txt"))
-    r = subprocess.run([sys.executable, script, mp4, "--out", out, "--frames", str(frames)],
-                       capture_output=True, text=True, timeout=3600)
-    if r.returncode != 0:
-        return {"error": r.stderr[-400:]}
-    txt = open(out, errors="replace").read() if os.path.exists(out) else ""
-    # AN EMPTY CAPTION IS A FAILURE, NOT A SUCCESS. `describe_video.py` skips a video it cannot read
-    # -- exp_01's step 0604 is a 762-byte mp4 with no stream in it -- writes `"records": []` and
-    # exits 0, so this returned an empty caption as if the VLM had looked and found nothing to say.
-    # Said out loud instead, with the one fact that usually explains it.
-    if not txt.strip():
-        sz = os.path.getsize(mp4) if os.path.exists(mp4) else 0
-        return {"error": f"no caption produced for {mp4} ({sz:,} bytes) -- the video could not be "
-                         f"read, or the model returned nothing", "out": out}
-    return {"out": out, "caption": txt[-1200:]}
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["build", "open", "shot", "run", "status", "wait", "artefacts",
-                                    "log", "caption", "cycle", "opencycle"])
+                                    "log", "cycle", "opencycle"])
     ap.add_argument("--spec", default=None, help="path of a hand-written spec, for open/opencycle")
-    ap.add_argument("--tab", default="platynereis")
+    ap.add_argument("--tab", default="bio")
     ap.add_argument("--form", default="{}")
     # A FORM IS OFTEN TOO BIG FOR A COMMAND LINE. The material tab's form carries one entry per
     # body -- twenty-seven of them in the default scene, each with a block, a colour and a
@@ -311,7 +278,6 @@ def main():
     # head (low z) to tail (high z), so a z-up camera draws it upside down against its own paper;
     # `--roll 180` turns the picture over without touching the data or the lighting.
     ap.add_argument("--roll", type=float, default=0.0)
-    ap.add_argument("--no-caption", action="store_true")
     # `--no-before`: NO STILL BEFORE THE RUN. The before-shot is the anatomy check; on a series of
     # runs of one validated anatomy it is the same picture every time and the human called it
     # useless in the record (exp_02 steps 0039, 0042, 2026-09-23). The after-shot and the movie stay.
@@ -336,8 +302,6 @@ def main():
         print(json.dumps(artefacts(a.name or form.get("name", "")), indent=1))
     elif a.cmd == "log":
         print(json.dumps(engine_log(a.name or form.get("name", ""), a.tail), indent=1))
-    elif a.cmd == "caption":
-        print(json.dumps(caption(a.mp4, ), indent=1))
     elif a.cmd == "run":
         note(f"run  device={a.device}")
         print(json.dumps(_post("/api/scene/run", {"device": a.device}), indent=1))
@@ -360,7 +324,7 @@ def main():
                                  azim=a.azim, elev=a.elev, zoom=a.zoom, roll=a.roll)
         # THE MOVIE IN THE 3D VIEW'S OWN LOOK (Cedric, 2026-10-27): unless the spec says `plotting.movie_look: dots`,
         # the step's movie and still are redrawn by tools/view_movie.py through the server's 3D renderer, so the
-        # main viewer and the 3D+t view show the same picture; the caption then describes that movie.
+        # main viewer and the 3D+t view show the same picture.
         _idx = rep["shot_after"].get("index")
         try:
             import yaml as _yaml
@@ -374,12 +338,10 @@ def main():
             note(f"view_movie {_idx}: rc {_r.returncode}")
             if _r.returncode == 0:
                 mp4 = _path("mp4", int(_idx))
-        if mp4 and not a.no_caption and os.path.exists(mp4):
-            rep["caption"] = caption(mp4, index=_idx)
         print(json.dumps(rep, indent=1))
     elif a.cmd == "cycle":
         # THE WHOLE LOOP, which is the reason this file exists: build, look, run, wait, collect,
-        # read the engine's own words, and ask the VLLM what the movie shows.
+        # and read the engine's own words.
         rep = {"build": build(a.tab, form)}
         if rep["build"].get("error"):
             print(json.dumps(rep, indent=1)); return
@@ -394,8 +356,6 @@ def main():
         rep["mp4"] = mp4 = _mp4_path(rep["artefacts"])
         rep["shot_after"] = shot(f"{a.why} (after the run)".strip(), mp4,
                                  azim=a.azim, elev=a.elev, zoom=a.zoom, roll=a.roll)
-        if mp4 and not a.no_caption and os.path.exists(mp4):
-            rep["caption"] = caption(mp4, index=rep["shot_after"].get("index"))
         print(json.dumps(rep, indent=1))
 
 

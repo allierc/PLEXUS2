@@ -288,7 +288,7 @@ def prime_session(model: str = "sonnet", timeout: int = 120) -> dict:
         return {"ok": False, "error": (r.stderr or "")[-300:]}
     SESSION.update(id=sid, model=model, primed=time.time(), chars=len(corpus))
     print(f"[studio] primed session {sid[:8]} with {len(corpus):,} chars "
-          f"({len(REFERENCES)} specs + operator registry + plexus2.tex) in {dt}s", flush=True)
+          f"({len(REFERENCES)} specs + operator registry) in {dt}s", flush=True)
     return {"ok": True, "id": sid, "seconds": dt, "chars": len(corpus)}
 
 
@@ -334,8 +334,7 @@ def author_spec(prompt: str, name: str, current: str = "", timeout: int = 600,
         cmd[2] = f"{msg_ref}\n\n{msg}"
     if deep:
         cmd += ["--allowedTools", "Read", "Glob", "Grep",
-                "--add-dir", os.path.join(REPO, "config"),
-                "--add-dir", os.path.join(REPO, "paper")]
+                "--add-dir", os.path.join(REPO, "config")]
         timeout = max(timeout, 150)
     else:
         cmd += ["--allowedTools", ""]                     # no tools: the reference is inline

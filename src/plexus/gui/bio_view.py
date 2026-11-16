@@ -1981,7 +1981,7 @@ class View:
                                         f"{os.path.splitext(os.path.basename(self.spec_path))[0]}.log")
                 os.makedirs(os.path.dirname(log_path), exist_ok=True)
                 self.RUN["log"] = log_path
-                r = pipeline.generate(self.spec_path, device=dev, force=True, describe=False, on_frame=_on_frame)
+                r = pipeline.generate(self.spec_path, device=dev, force=True, plot_after=False, on_frame=_on_frame)
                 self.RUN["out_dir"] = r.get("data_dir")
                 self.RUN["stopped"] = bool(r.get("stopped"))
                 fm = r.get("frame_ms")
