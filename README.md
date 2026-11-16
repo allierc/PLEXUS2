@@ -2,10 +2,10 @@
 
 A differentiable cell tissue computation
 
-![exp05_spheroid_v01_f1000](exp05_spheroid_v01_f1000.gif)
+![mpm_sphere_twin_4000](mpm_sphere_twin_4000.gif)
 
 ```bash
-python Plexus_Main.py -o generate tissue/exp05_spheroid_v01_f1000 --output_root <data root>   # run one spec of config/
+python Plexus_Main.py -o generate tissue/mpm_sphere_twin_4000 --output_root <data root>   # run one spec of config/
 ```
 
 The watcher shows the records of `experiments/`, one at a time (`?rec=experiments/<name>`).
