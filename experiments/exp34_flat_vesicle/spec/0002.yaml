@@ -1,0 +1,172 @@
+general:
+  name: exp33_ucb_flat_e007_h150_e09
+  headline: random rotation of the whole body at every substep, a sphere of 100 cells, two divisions, slab on with a curvature-corrected plane,
+    contact repulsion overlap 0.2
+  title: A vesicle turned by a random rotation at every substep (frame_rotation apply and undo round the MPM substep block, about the centroid
+    of the points, so the per-cell grids and the contact lattice see the body at a new orientation each time), a vesicle of 100 MPM cells (seed_positions
+    vesicle, one layer on a sphere of about 30 um radius) grows and divides twice (cut across the layer, in the plane that contains the normal,
+    230 frames), cell_normal fits the layer normal and the point of the layer plane at every cell from its neighbours, deform_control cell_flatten
+    flattens each cell along that normal with a 0.0035 per frame, active_force layer_plane holds every cell in a 12 um slab round a quadratic
+    surface fitted through its neighbours, the cell itself left out, contact overlap 0.2 repels the cells, interface width 0.2, contact tension
+    -0.1
+  seed: 1
+  n_frames: 1500
+  dt: 0.1
+  record_cap: 751
+  boundary: free
+  dim: 3
+  world: [50.0, 50.0, 50.0]
+  units: {length_um: 10.0, time_s: 60.0}
+fields:
+  mpm_grid: {frame: mpm_grid, n_grid: 15, per_parent: cell, cell_box: 3.0}
+sets:
+  cell:
+    n: 100
+    buffer: 354
+    type_layout: ordered
+    types:
+      epi: {count: 100, shape: ball, material: viscoelastic, youngs: 20.0, tau: 2.0, density: 1.0}
+    state:
+      pos: {width: 3, role: coordinate, integration: second_order_coordinate, boundary: world}
+      vel: {width: 3, role: rate, integration: second_order_rate, record: false}
+      arr: {width: 1}
+      ij: {width: 2}
+      tone: {width: 1}
+      mass: {width: 1}
+      mass0: {width: 1}
+      born: {width: 1}
+      div_ready: {width: 1}
+      vc: {width: 3}
+      mid: {width: 3}
+      tension: {width: 1}
+      contact_tension: {width: 1}
+      grow: {width: 1}
+      flat: {width: 1}
+      half: {width: 1}
+  pt:
+    entity: mpm_particle
+    parent: cell
+    per_parent: 125
+    grow_reserve: 200
+    density: 1.0
+    radius: 0.5
+    state:
+      pos: {width: 3, role: coordinate, integration: second_order_coordinate, boundary: world}
+      vel: {width: 3, role: rate, integration: second_order_rate, record: false}
+      pid: {width: 1}
+      cellc: {width: 1}
+      face: {width: 1}
+operators:
+- op: frame_rotation
+  model: apply
+  at: pt
+  positions:
+    pt: [pos]
+    cell: [pos, vc, mid]
+  vectors:
+    pt: [vel]
+    cell: [vel]
+  seed: 1
+- {op: frame_rotation, model: undo, at: pt}
+- op: pair_potential
+  model: cell_contact
+  at: pt
+  cells: cell
+  repulsion_strength: 600.0
+  contact_slack: 0.2
+  contact_surface_tension:
+  - [-0.1]
+  contact_edge_width: 0.2
+  contact_surface_tension_block: contact_tension
+- {op: mpm_strain, at: pt, implementation: differentiable}
+- {at: mpm_grid, drag: 1.0, from: pt, implementation: differentiable, op: mpm_scatter}
+- {op: mpm_grid_update, at: mpm_grid, cell_surface_tension: 0.15, csf_rho: 1.0, csf_band: 0.1, csf_smooth: 1, tension_on: all, cell_surface_tension_block: tension,
+  implementation: body_csf_balanced_diff}
+- {op: mpm_gather, at: pt, from: mpm_grid, implementation: differentiable}
+- {op: active_force, model: layer_slab, at: pt, cells: cell, centre_block: vc, mid_block: mid, half_thickness: 0.6, wall_stiffness: 3000.0, half_thickness_block: half}
+- {op: deform_control, implementation: cell_flattening, at: pt, cells: cell, centre_block: vc, block: flat}
+- {op: aggregate_centroid, at: cell, child: pt}
+- op: cell_normal
+  at: cell
+  block: vc
+  mid_block: mid
+  curvature: true
+  radius: 2.5
+  reach: 1000.0
+  prior: 0.02
+  blend: 0.5
+  prior_centre: [25.0, 25.0, 25.0]
+- {op: cell_cycle, model: mpm, at: cell, rule: doubler_mass, factor: 2.0, factor_cv: 0.0, mark: div_ready, born: born, seed: 1}
+- {op: cell_grow, model: mpm, at: cell, points: pt, rate: 0.00231, dims: 3.0, rho: 1.0, after_frame: 0, rate_block: grow}
+- {op: cell_populate, model: mpm, at: cell, points: pt, seat: fill, jitter: 0.3, swell: true, seed: 1}
+- op: cell_divide
+  model: cleave_tangent
+  at: cell
+  points: pt
+  yolk_weight: 0.0
+  p_div: 1.0
+  max_per_call: 64
+  mark: div_ready
+  daughter_mark: born
+  split: median
+  inherit: [contact_tension, flat, grow, half, mid, tension, vc]
+  centre_block: vc
+  gap: 0.1
+  centre: [25.0, 25.0, 25.0]
+  seed: 1
+schedule:
+- cell_normal
+- steps: [frame_rotation, active_force, pair_potential, mpm_strain, mpm_scatter, mpm_grid_update, mpm_gather, frame_rotation]
+  substep_dt: 0.01
+  capture: false
+- deform_control
+- aggregate_centroid
+- cell_normal
+- cell_cycle
+- cell_grow
+- cell_populate
+- cell_divide
+seed:
+- op: seed_positions
+  model: vesicle
+  at: pt
+  cell_set: cell
+  centre: [25.0, 25.0, 25.0]
+  spacing: 1.05
+  inner_extent: 0.5
+  outer_extent: 0.5
+  point_spacing: 0.2
+  live_per_cell: 125
+  seed: 1
+plotting:
+  renderer: vtk_points
+  subject: pt
+  cell_colours: id
+  render_3d: contour
+  contour_bodies:
+    mode: partition
+    iso: 0.55
+    sigma: 2.0
+    reach: 0.25
+    smooth_method: taubin
+    smooth: 40
+    pass_band: 0.02
+    coat: 0.0
+    color_by:
+      block: cellc
+      channel: 0
+      cmap: YlOrBr
+      range: [0.0, 19.0]
+      floor: 0.15
+  surface_opacity: 1.0
+  surface_roughness: 0.5
+  surface_diffuse: 0.9
+  surface_ambient: 0.25
+  background: '#8d99a6'
+  foreground: white
+  box_frame: false
+  camera: {elev: 20, azim: 90}
+  zoom: 1.0
+  duration_s: 10
+  slow_motion: 1
+  surface_iso_frac: 0.15

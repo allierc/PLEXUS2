@@ -1,0 +1,7 @@
+time   2026-10-31 14:12:34
+run    tissue/exp33_ucb_flat2_e046_h150_e08 (exp33 optimisation pass 8, horizon 150 frames of 100 substeps; LEFT the cut at the equator from above, RIGHT the full oblique view, 31 recorded rows at 10 fps; under them the diameter, holes and mixing against the frames, their end values against the passes, and the knobs' path)
+score  gaps at the end of the horizon (band units; |gap| <= 1 is inside the twin's seed spread): diameter -3.68, thin +1.41, round +0.00, void +1.12, gini +0.00
+score  fraction of windows inside the band: diameter 0.23, thin 0.15, round 1.00, void 0.97, gini 1.00
+score  window loss mean 7.2, last 10 windows 28.07; 1 Adam steps, lr 0.0004
+score  knobs at the end: flat 0.00295, half 0.692, contact_tension -0.195, tension 1.44, grow 0.00274
+why    BEST OF UCB round ending with episode 49: UCB episode 46 (exp33_ucb_flat2_e046), value -7.2 (minus the window-loss mean of its best pass at the 150-frame horizon); best pass exp33_ucb_flat2_e046_h150_e08; switches slab_k 3000.0; start flat 0.00281, half 0.695, contact_tension -0.182, tension 1.37, grow 0.00274; plan 50:5:2,100:2:1,150:2:1
