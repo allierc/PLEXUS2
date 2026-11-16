@@ -50,49 +50,16 @@ nothing is not a weaker result, it is not a result. Invariants — momentum, mas
 numerical method actually requires — are checked and reported, because every one of them has
 already been found broken behind a picture that looked fine.
 
-## What is in this repository
+## Where to look
 
-The engine, the operator library, the record viewer and the experiments of the talk
-*PLEXUS: differentiable tissue computing* (November 2026):
-
-| experiment | what it shows | slides |
-|---|---|---|
-| `experiments/composition` | Gray-Scott Turing pattern, cell growth and division, and both composed on a growing shell (3D vertex model) | 11-14 |
-| `experiments/exp01_minisite` | material point method (MPM) demos: elastic, plastic and liquid bodies, a 100-million-point bench | 18 |
-| `experiments/exp29_cell_tissue_2` | cells made of material points held by junctions; a sweep of the junction parameters | 19-22 |
-| `experiments/exp09_molecular_landscape` | a crowded molecular landscape, every molecule an MPM body | 23 |
-| `experiments/exp05_spheroid_from_words` | a biologist's three-sentence description run step by step: spheroids, signalling, tissue topology | 25-33 |
-
-Each experiment is a record: one numbered step per run, with its spec (`spec/`), the reason it
-was run (`why/`), its movie (`mp4/`) and still (`png/`). The notes `experiments/<name>.md` hold each experiment's decisions and findings.
-Every spec of a record is also in `config/` under the run's name.
-
-| folder | content |
-|---|---|
-| `src/plexus/` | the language: schema, engine, operators, renderers, the viewer (`gui/`) |
-| `src/plexus/operators/` | the operator library, its table in `README.md` |
-| `config/` | the specs of every recorded run (`si_material/`, `tissue/`) |
-| `tools/` | the record tools (`gui_drive`, `archive_run`, `view_movie`, `watcher_deck`), the studio renderers (`exp23_studio`, `exp29_studio`, `cell_panels`), and the experiment tools of exp05, exp09 and exp29 |
+- **The operator library**, generated from the operators' own documentation —
+  [`src/plexus/operators/README.md`](src/plexus/operators/README.md).
 
 ## Running one
 
 ```bash
-python Plexus_Main.py -o generate tissue/exp05_spheroid_v01_f1000 --output_root .
-python Plexus_Main.py -o generate si_material/exp01_three_materials_r2 --output_root .
+python Plexus_Main.py -o generate tissue/exp05_spheroid_v01_f1000 --output_root <data root>
 ```
 
-A run writes its trajectory, its movie (`movie.mp4`) and its stills to
-`<output_root>/graphs_data/<folder>/<name>/`, and a log to `<output_root>/log/<folder>/<name>/`;
-both folders are ignored by git. `--device cuda:0` is the default, `--device cpu` works for the
-small runs. The environment needs Python 3.10+, PyTorch with CUDA, NVIDIA Warp, PyVista / VTK,
-NumPy, SciPy and PyYAML.
-
-## Watching a record
-
-```bash
-PLEXUS_BUILDER=experiments/exp05_spheroid_from_words python Plexus_gui.py --port 8799
-# then open http://127.0.0.1:8799/watch?rec=experiments/exp05_spheroid_from_words
-```
-
-The watcher plays each step's movie beside its spec, the operators it composes (the `plexus`
-pane), their equations (`math`) and the reason the step was run.
+A run writes its trajectory and its movie to the data root given by `--output_root`. The specs
+live in `config/`, the language in `src/plexus/`, and the operator library in `src/plexus/operators/`.
