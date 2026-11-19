@@ -287,6 +287,18 @@ def family_height(R):
     return h, ids
 
 
+def family_cells(R, n):
+    """Per row, the slots of the live cells of family `n` (1-based, in slot order of the frame-0 cells): a cell belongs to the family whose frame-0 centre is nearest to its centroid in xy (as `family_height`)."""
+    occ0 = R.z["cell__occ"][0] > 0.5
+    centres = R.z["cell__pos"][0][occ0][:, :2]
+    out = {}
+    for t in range(R.rows):
+        cells = np.flatnonzero(R.live[t])
+        fam = np.argmin(((R.centroids(t)[cells][:, None, :2] - centres[None]) ** 2).sum(-1), axis=1)
+        out[t] = cells[fam == int(n) - 1]
+    return out
+
+
 def by_id(R) -> bool:
     """Colour every cell by its own id instead of by activator: the `--cell-colours` flag or the spec's `plotting.cell_colours: id`."""
     return bool(CELL_COLOURS["on"]) or str((((R.spec or {}).get("plotting") or {}).get("cell_colours", ""))).lower() in ("id", "type")
@@ -398,6 +410,9 @@ POINT_VOLUME = {"v": None}                           # `--point-volume V`: over 
 SECTION_SLAB = {"h": None}                           # `--section-slab H` (Cedric, 2026-11-15, exp05: "render from now two panels full view and cross section"): the second panel of `--section` shows only the cells within H length units of the plane through the tissue's centre, seen face-on (a thin slice), instead of the whole far half
 SECTION_VIEW = {"cam": None}                         # `--section-view elev,azim`: the camera of the cross-section panel (default: the main camera's)
 NO_INSETS = {"on": False}                            # `--no-insets` (same message: "remove plot curves"): no inset column; the frame is the 3-D panel(s) alone, with the clock
+CELL_CUT = {"on": False}                              # `--cell-cut`: with a cut, the section is CELL BY CELL as the watcher draws `near_side: far` (live_movie._iso_cells_poly): a cell whose centroid lies on the camera's side of the plane through the centre of the live points is left out whole, every other cell is drawn whole, nothing clipped
+FAMILY = {"n": None, "cells": None}                     # `--family N` (with --dots): draw, and frame the camera on, the cells of family N only (1-based, the number the movie prints on it); "cells": row -> slots of its live cells
+BARE = {"on": False, "fill": 0.95, "zoom": 1.0, "bar": False}                     # `--bare` (deck, 2026-11-16, the dotszoom twins): no scale bar, no clock; with it the window is SQUARE (height x height) and the camera takes `fill` of the limiting side
 MARK_COLOURS = {}                                    # `--mark-colours NAME=HEX ...` (exp05 routes, 2026-11-15): with --dots, the cells of these types are drawn in that colour and every other cell by its activity: a mark a cell keeps (cell_fate) seen over the signal
 CHEM_RGB = {"cols": None}                            # `--chem-rgb HEX HEX HEX` (exp05 rock-paper-scissors, 2026-11-15): a point cell is drawn in the blend of these three colours by the shares of its first three chem channels
 TYPE_COLOURS = {}                                    # `--type-colours NAME=HEX ...`: with `--cell-colours type`, the colour of a cell type over the spec's `plotting.colors`
@@ -839,7 +854,7 @@ def legend(frame, a_top, label, x0=28, y0=None):
 
 
 # ---------------------------------------------------------------------------------------------------------- the camera
-def camera_for(pl, pts, view_angle, size, view, up, dist_extra=0.0):
+def camera_for(pl, pts, view_angle, size, view, up, dist_extra=0.0, fill=None):
     """Aim at the middle of `pts`, back off until the points take 84 % of the window's height or 90 % of its width."""
     w, h = size
     side = np.cross(up, view)
@@ -849,7 +864,16 @@ def camera_for(pl, pts, view_angle, size, view, up, dist_extra=0.0):
     mid = c + side * 0.5 * (ss.max() + ss.min()) + up * 0.5 * (su.max() + su.min())
     hu, hs = 0.5 * (su.max() - su.min()), 0.5 * (ss.max() - ss.min())
     tn = math.tan(math.radians(view_angle / 2))
-    dist = max(hu / (0.84 * tn), hs / (0.90 * tn * w / h)) + float(sv.max() - 0.5 * (sv.max() + sv.min()))
+    fh, fw = (0.84, 0.90) if fill is None else (fill, fill)   # share of the window's height / width the points take (`fill`: --bare)
+    dist = max(hu / (fh * tn), hs / (fw * tn * w / h)) + float(sv.max() - 0.5 * (sv.max() + sv.min()))
+    if fill is not None:                                     # `--bare`: the PERSPECTIVE extent, not the orthographic one above (points nearer the camera look larger): re-centre `mid` on the projected box and back off until it takes `fill` of the window's sides
+        for _ in range(6):
+            q = pts - mid
+            dz = dist - q @ view
+            xs, ys = (q @ side) / (dz * tn * w / h), (q @ up) / (dz * tn)
+            mid = mid + side * 0.5 * (xs.max() + xs.min()) * float(dz.mean()) * tn * w / h + up * 0.5 * (ys.max() + ys.min()) * float(dz.mean()) * tn
+            q = pts - mid
+            dist = float(max(((q @ view) + np.abs(q @ side) / (fill * tn * w / h)).max(), ((q @ view) + np.abs(q @ up) / (fill * tn)).max()))
     pl.camera.position = tuple(mid + dist * view)
     pl.camera.focal_point = tuple(mid)
     pl.camera.up = tuple(up)
@@ -942,6 +966,19 @@ def _draw_dots(pl, R, k, X, live, a, a_top, cells, cut, c0, view):
     sel = live & np.isin(R.pid[k], cells)
     P = X[sel]
     owner = np.rint(R.pid[k][sel]).astype(np.int64)
+    nuc_pts = None
+    if DOTS.get("nucleus"):                                  # `--dots-nucleus`: the nucleus points of each cell in plotting.contour_bodies.nucleus_color (as the surfaces' nuclei)
+        _cb = ((R.spec or {}).get("plotting") or {}).get("contour_bodies") or {}
+        if not hasattr(R, "_nuc"):
+            R._nuc = R.z[f"pt__{_cb['nucleus']}"][..., 0] if _cb.get("nucleus") and f"pt__{_cb['nucleus']}" in R.z.files else None
+        if R._nuc is not None:
+            nuc_pts = R._nuc[k][sel] > 0.5
+            nuc_rgb_ = np.asarray(__import__("matplotlib.colors").colors.to_rgb(str(_cb.get("nucleus_color", "#1b1464")))) * 255.0
+            if getattr(R, "type_alpha", None) is not None:       # the cells are translucent (plotting.type_opacity), the nucleus is not: a fixed share of each cell's non-nucleus points, its opacity, is drawn, chosen by point slot (the same points in every frame), so the nucleus shows through
+                al = np.asarray(R.type_alpha, float)[np.clip(owner, 0, len(R.type_alpha) - 1)]
+                u = ((np.flatnonzero(sel).astype(np.uint64) * np.uint64(2654435761)) % np.uint64(1000)).astype(float) / 1000.0
+                k0 = nuc_pts | (u < al)
+                P, owner, nuc_pts = P[k0], owner[k0], nuc_pts[k0]
     if cut:
         dv = (P - np.asarray(c0)) @ np.asarray(view)
         keep = (np.abs(dv) <= float(SECTION_SLAB["h"])) if SECTION_SLAB["h"] else (dv <= 0.0)       # a thin slice through the centre, or the far half
@@ -953,6 +990,7 @@ def _draw_dots(pl, R, k, X, live, a, a_top, cells, cut, c0, view):
                 m_ = owner == c
                 keep[m_] = bool((dv[m_] < 0.0).any())
         P, owner = P[keep], owner[keep]
+        nuc_pts = nuc_pts[keep] if nuc_pts is not None else None
     if len(P) == 0:
         return
     uc = np.unique(owner)
@@ -968,6 +1006,8 @@ def _draw_dots(pl, R, k, X, live, a, a_top, cells, cut, c0, view):
                 sel_c = uc[ntk[uc] == R.type_names.index(tn)]
                 tab[sel_c] = np.asarray(_mcm.to_rgb(hx)) * 255.0
     rgb = tab[owner]
+    if nuc_pts is not None:
+        rgb = np.where(nuc_pts[:, None], nuc_rgb_[None, :], rgb)
     cam = pl.camera
     pos, foc = np.asarray(cam.position, float), np.asarray(cam.focal_point, float)
     n = (pos - foc) / max(float(np.linalg.norm(pos - foc)), 1e-12)
@@ -1017,6 +1057,12 @@ def draw_cells(pl, kind, R, k, a_top, cut, c0, R0, view, h_vox, alpha_over=None)
         cells = np.flatnonzero(R.live[k])
         if getattr(R, "draw_types", None) is not None and getattr(R, "node_type", None) is not None:
             cells = cells[np.isin(R.node_type[cells], list(R.draw_types))]
+        if FAMILY["cells"] is not None:
+            cells = np.intersect1d(cells, FAMILY["cells"][k])
+        if cut and CELL_CUT["on"] and len(cells):
+            ctr = X[live].mean(0)
+            cells = cells[((R.centroids(k)[cells] - ctr) @ np.asarray(view, float)) <= 0.0]
+            cut = False
         if DOTS["factor"]:
             _draw_dots(pl, R, k, X, live, a, a_top, cells, cut, c0, view)
             return
@@ -1066,7 +1112,7 @@ def draw_cells(pl, kind, R, k, a_top, cut, c0, R0, view, h_vox, alpha_over=None)
             pl.add_mesh(nuclei[0] if len(nuclei) == 1 else pv.merge(nuclei, merge_points=False), scalars="rgb", rgb=True, smooth_shading=True, pbr=False, specular=0.0,
                         diffuse=0.15, ambient=0.85, name="cell_nuclei", show_scalar_bar=False, opacity=1.0)
         ls_ = label_spec(R)
-        if ls_ is not None:
+        if ls_ is not None and not BARE["on"]:
             draw_family_labels(pl, R, k, X, live, ls_)
     else:
         pos, es, et, ef, nF = R.mesh(k)
@@ -1172,24 +1218,29 @@ def render(run, out_mp4, out_png, seconds=10.0, stride=None, cam=None, cut=False
                   cells_first=int(n_live[0]), cells_last=int(n_live[-1]), t_end=float(t[-1]), t_unit=R.t_unit,
                   vol_unit=R.vol_unit, volume_mean_first=float(vmean[0]), volume_mean_last=float(vmean[-1]),
                   kind=kind, fake=fake, no_chem=bool(no_chem))
+    if FAMILY["n"] and kind == "mpm":
+        FAMILY["cells"] = family_cells(R, FAMILY["n"])
     # THE VIEW
     pcam = (spec.get("plotting") or {}).get("camera") or {}
     el, az = cam if cam else (float(pcam.get("elev", 20.0)), float(pcam.get("azim", 90.0)))
     view, up = view_vectors(el, az)
     # points that frame the scene: every drawn row
     if kind in ("mpm", "point"):
-        allp = np.concatenate([R.positions(k)[R.occ[k]][:: max(1, int(R.occ[k].sum()) // 3000)] for k in ks])
+        _sel = {k: R.occ[k] & (np.isin(R.pid[k], FAMILY["cells"][k]) if FAMILY["cells"] is not None else True) for k in ks}      # `--family`: the framing points are the family's, all of them (a thinned family missed its extremes)
+        allp = np.concatenate([R.positions(k)[_sel[k]][:: max(1, int(_sel[k].sum()) // 3000)] for k in ks])
     else:
         allp = np.concatenate([R.mesh(k)[0][:: max(1, R.tr.nV(k) // 3000)] for k in ks])
     c0 = np.median(allp, axis=0)
     R0 = float(np.percentile(np.linalg.norm(allp - c0, axis=1), 99))
+    if BARE["on"]:
+        width3d = height                                     # a square window
     if section:                                              # `--section` (Cedric, 2026-11-01): TWO 3-D panels, the whole tissue and, beside it, the same frame with the cells on the camera's side hidden (a cross section)
         width3d = 720
     pl = pv.Plotter(off_screen=True, window_size=(width3d, height))
     pl.set_background(GROUND)
     _add_lights(pl, c0, R0, view, up)
     va = 30.0
-    dist, mid = camera_for(pl, allp, va, (width3d, height), view, up)
+    dist, mid = camera_for(pl, allp, va, (width3d, height), view, up, fill=BARE["fill"] if BARE["on"] else None)
     pl2 = None
     if section:
         pl2 = pv.Plotter(off_screen=True, window_size=(width3d, height))
@@ -1199,13 +1250,16 @@ def render(run, out_mp4, out_png, seconds=10.0, stride=None, cam=None, cut=False
         view2, up2 = view_vectors(*SECTION_VIEW["cam"]) if SECTION_VIEW["cam"] else (view, up)
         _add_lights(pl2, c0, R0, view2, up2)
         dist2, _ = camera_for(pl2, allp, va, (width3d, height), view2, up2)
+    if BARE["on"] and BARE["zoom"] != 1.0:                   # `--zoom Z` (with --bare): the same fixed camera Z times closer to the rig's centre, so the window shows 1/Z of the width and the outer families leave the frame
+        dist = dist / BARE["zoom"]
+        pl.camera.position = tuple(np.asarray(mid) + dist * view)
     px_per_unit = height / (2.0 * dist * math.tan(math.radians(va / 2)))
     bar = None
-    if R.um > 0:
+    if R.um > 0 and (not BARE["on"] or BARE["bar"]):
         tgt = 0.2 * width3d / px_per_unit * R.um
         p10_ = 10 ** math.floor(math.log10(tgt))
         L_um = max(f * p10_ for f in (1, 2, 5) if f * p10_ <= tgt)
-        bar = (L_um, L_um / R.um * px_per_unit, int(0.90 * height))
+        bar = (L_um, L_um / R.um * px_per_unit, int((0.955 if BARE["on"] else 0.90) * height))      # --bare: in the strip under the framed points
     fps = int(fps) if fps else max(1, round(len(ks) / seconds))                      # `--fps` (Cedric, 2026-10-29, 'the movie looks jerky'): 16 by default, 4 times the 4 fps of a 40-frame movie
     writer = iio.get_writer(out_mp4, fps=fps, quality=8, macro_block_size=16)
     x_side = width3d * (2 if section else 1)                 # where the insets' column starts
@@ -1217,7 +1271,7 @@ def render(run, out_mp4, out_png, seconds=10.0, stride=None, cam=None, cut=False
         frame3d = e23._ink_frame(pl, dist, va, height, False, **_dots_ink())
         if bar is not None:
             frame3d = e23._scale_bar(frame3d, bar, "white")
-        if not by_id(R):
+        if not by_id(R) and not BARE["on"]:
             frame3d = legend(frame3d, a_top, ACT_LABEL["text"] + " per cell" + (" (fake, test)" if fake else " (none in this run)" if no_chem else ""), y0=height - 92)
         frame = np.empty((height, W_total, 3), np.uint8)
         frame[:] = np.array([int(GROUND[i:i + 2], 16) for i in (1, 3, 5)], np.uint8)
@@ -1244,7 +1298,8 @@ def render(run, out_mp4, out_png, seconds=10.0, stride=None, cam=None, cut=False
             tiles.append(tile_junction(t, pul[0], pul[1], pul[2], k, R.t_unit, pul[3], ylabel="force of the pull springs (per chain)"))
         for i_, tile in enumerate([] if NO_INSETS["on"] else tiles):
             e23._blend(frame, tile, x_side + (SIDE_W - tile.shape[1]) // 2, 16 + i_ * (tile.shape[0] + 14))
-        frame = e23._clock(frame, f"{int(n_live[k])} cells   t = {t[k]:.0f} {R.t_unit}", "white", corner=CLOCK_CORNER)
+        if not BARE["on"]:
+            frame = e23._clock(frame, f"{int(n_live[k])} cells   t = {t[k]:.0f} {R.t_unit}", "white", corner=CLOCK_CORNER)
         writer.append_data(frame[: height // 2 * 2, : W_total // 2 * 2])
         if (j + 1) % 10 == 0:
             print(f"  frame {j + 1}/{len(ks)}", flush=True)
@@ -1255,6 +1310,126 @@ def render(run, out_mp4, out_png, seconds=10.0, stride=None, cam=None, cut=False
         pl2.close()
     scales["spec"] = spec_path
     return scales
+
+
+# ---------------------------------------------------------------------------------------------------------- the ORBIT
+def render_orbit(run, out_mp4, out_png, seconds=10.0, hold=2.0, fps=25, size=1080, cam=None, fit=0.84, clock=True, ui_scale=1.0, x1=None, full_run=False, run_stride=1):
+    """ONE ROUND AROUND THE LAST STORED ROW (Cedric, 2026-11-15, deck: "a rotation to look at the scene over one round ... the movies must end static, no replay"). The run's last row is
+    drawn as in `render` (same flags, colours, ink, ground, scale bar, clock), seen by a camera at the spec's (or `--cam`'s) elevation whose azimuth sweeps 360 degrees from the
+    starting one to itself over `seconds` s, eased (0.5 - 0.5 cos pi u: still at both ends); the last orbit frame is the first one's pose, and `hold` s of that same frame follow,
+    so the movie ends static (the whole end, the last orbit frame and the hold, is ONE coded picture repeated, so its frames are pixel-identical). One pass, nothing replayed, no activity colour bar, no insets. A single `size` x `size` px view; H.264 yuv420p crf 18. `fit`: the body's share of the window's height at the azimuth that needs the most room (its width limit is fit x 0.90 / 0.84); `clock` False leaves the "N cells t = T" label out; `ui_scale`: the scale bar's and the label's 22 pt text size x ui_scale (a window drawn at half the size it is shown at keeps its text size in the montage). `full_run`: the movie first draws EVERY stored row of the run (one frame per row, no stride), camera still at the starting pose, each with its own label, then the orbit of the last row; the one distance and focal point then hold the points of every row at every azimuth, so the scale never changes between the two parts. `run_stride` (with `full_run`): draw every run_stride-th stored row only (rows 0, s, 2s, ...; the fit still holds every row, the orbit is still of the LAST row; default 1 = every row). `x1` = (window width, window height, tile side): the body's SCALE is that of the x1 movie of the run (`render`'s camera, framed on the points of every drawn row in a window of that size, seen in a tile cut `side` px square from it), so the orbit's tile shows the body as large as the x1 tile does, unless the body at some azimuth then needs more room than `fit` allows. Returns a dict of what was drawn."""
+    import pyvista as pv
+    import imageio.v2 as iio
+    import exp23_studio as e23
+    e23._LOOK.clear(); e23._LOOK.update(e23.LOOK["ink"])
+    e23._LOOK["text"] = "white"; e23._LOOK["border"] = (255, 255, 255)
+    d, kind = resolve(run)
+    if kind not in ("mpm", "point"):
+        raise SystemExit("--orbit draws MPM and point-cell runs only")
+    spec, spec_path = read_spec(d)
+    R = MPMRun(d, spec) if kind == "mpm" else PointRun(d, spec)
+    a_rows, _, n_live = R.series()
+    a_top = top_of_scale(a_rows)
+    if a_top <= 1e-9:
+        a_top = 1.0
+    k = R.rows - 1                                           # the last stored row, frozen: only the camera moves
+    P = R.positions(k)[R.occ[k]]
+    if full_run:                                             # the fit holds every row's points (at most ~3000 of each)
+        P = np.concatenate([R.positions(k_)[R.occ[k_]][:: max(1, int(R.occ[k_].sum()) // 3000)] for k_ in range(R.rows)])
+    pcam = (spec.get("plotting") or {}).get("camera") or {}
+    el, az0 = cam if cam else (float(pcam.get("elev", 20.0)), float(pcam.get("azim", 90.0)))
+    va = 30.0
+    # ONE distance and ONE focal point for the whole orbit: the middle of the body's bounding box, and the farthest back-off any azimuth needs to hold the body at 84 % of the
+    # window's height (camera_for's rule), so the body is whole in every frame and the scale bar keeps its length
+    tn = math.tan(math.radians(va / 2))
+    foc = 0.5 * (P.min(0) + P.max(0))
+    dist = 0.0
+    for a_ in az0 + np.linspace(0.0, 360.0, 72, endpoint=False):
+        view, up = view_vectors(el, a_)
+        p = P - foc
+        sv = p @ view
+        dist = max(dist, max(np.abs(p @ up).max() / (fit * tn), np.abs(p @ np.cross(up, view)).max() / (fit * 0.90 / 0.84 * tn)) + float(sv.max()))
+    R0 = float(np.percentile(np.linalg.norm(P - foc, axis=1), 99))
+    pl = pv.Plotter(off_screen=True, window_size=(size, size))
+    pl.set_background(GROUND)
+    dist_need = dist
+    dist_x1 = None
+    if x1:                                                   # the x1 movie's scale: camera_for on the points of every drawn row, as `render` frames its window, then x (tile side / window height)
+        w1, h1, side1 = x1
+        ks_ = sorted(set(range(0, R.rows, max(1, math.ceil(R.rows / 160)))) | {R.rows - 1})
+        allp = np.concatenate([R.positions(k_)[R.occ[k_]][:: max(1, int(R.occ[k_].sum()) // 3000)] for k_ in ks_])
+        v0, u0 = view_vectors(el, az0)
+        d1, _ = camera_for(pl, allp, va, (w1, h1), v0, u0)
+        dist_x1 = d1 * side1 / h1                           # the distance that draws the body as large as the x1 tile does
+        dist = max(dist_x1, dist_need)
+    px_per_unit = size / (2.0 * dist * tn)
+    bar = None
+    if R.um > 0:
+        tgt = 0.2 * size / px_per_unit * R.um
+        p10_ = 10 ** math.floor(math.log10(tgt))
+        L_um = max(f * p10_ for f in (1, 2, 5) if f * p10_ <= tgt)
+        bar = (L_um, L_um / R.um * px_per_unit, int(0.90 * size))
+    n_orbit, n_hold = int(round(seconds * fps)), int(round(hold * fps))
+    import subprocess, tempfile, imageio_ffmpeg
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    tmp = tempfile.TemporaryDirectory()
+
+    def x264(path):                                          # H.264 yuv420p crf 18, no B-frames (the two parts are joined by stream copy), frames piped in as RGB
+        return subprocess.Popen([ffmpeg, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{size}x{size}", "-r", str(fps), "-i", "-",
+                                 "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p", "-bf", "0", path], stdin=subprocess.PIPE)
+    part_a, part_b = os.path.join(tmp.name, "orbit.mp4"), os.path.join(tmp.name, "still.mp4")
+    writer = x264(part_a)
+    label = f"{int(n_live[k])} cells   t = {R.t[k]:.0f} {R.t_unit}"
+    frame = None
+    h_vox_ = 0.55 * (R.v ** (1.0 / 3.0)) if kind == "mpm" else 0.0
+
+    def shot(k_, az, label_):
+        view, up = view_vectors(el, az)
+        pl.camera.position = tuple(foc + dist * view)
+        pl.camera.focal_point = tuple(foc)
+        pl.camera.up = tuple(up)
+        pl.camera.view_angle = va
+        _add_lights(pl, foc, R0, view, up)
+        draw_cells(pl, kind, R, k_, a_top, False, foc, R0, view, h_vox_)
+        f_ = e23._ink_frame(pl, dist, va, size, False, **_dots_ink())
+        if bar is not None:
+            f_ = e23._scale_bar(f_, bar, "white")
+        if clock:
+            f_ = e23._clock(f_, label_, "white", corner=CLOCK_CORNER)
+        return f_
+    from PIL import ImageFont
+    truetype = ImageFont.truetype                           # e23's overlays draw their text at a fixed 22 pt: scaled here, and put back after the frames
+    if ui_scale != 1.0:
+        ImageFont.truetype = lambda f_, size=10, *a_, **k_: truetype(f_, max(6, round(size * ui_scale)) if size == 22 else size, *a_, **k_)
+    if full_run:                                             # every stored row, one frame each, the camera at the starting pose
+        for k_ in range(0, R.rows, max(1, int(run_stride))):
+            writer.stdin.write(np.ascontiguousarray(shot(k_, az0, f"{int(n_live[k_])} cells   t = {R.t[k_]:.0f} {R.t_unit}")).tobytes())
+            if (k_ + 1) % 50 == 0:
+                print(f"  run row {k_ + 1}/{R.rows}", flush=True)
+    for j in range(n_orbit):
+        u = j / (n_orbit - 1)
+        az = az0 + 360.0 * (0.5 - 0.5 * math.cos(math.pi * u))   # u = 1: az0 + 360, the starting pose
+        frame = shot(k, az, label)
+        if j < n_orbit - 1:
+            writer.stdin.write(np.ascontiguousarray(frame).tobytes())
+        if (j + 1) % 25 == 0:
+            print(f"  orbit frame {j + 1}/{n_orbit}", flush=True)
+    ImageFont.truetype = truetype
+    writer.stdin.close(); assert writer.wait() == 0
+    # THE STATIC END, EXACT: a P-frame of an unchanged picture is still refined for a dozen frames (the hold's frames differed by up to 31 levels), so the last orbit frame is coded
+    # ONCE as a picture of its own and that one coded sample is repeated (stream copy) for it and for the `hold` s after it: every frame of the end decodes to the same pixels
+    w2 = x264(part_b)
+    w2.stdin.write(np.ascontiguousarray(frame).tobytes()); w2.stdin.close(); assert w2.wait() == 0
+    lst = os.path.join(tmp.name, "list.txt")
+    with open(lst, "w") as f_:
+        f_.write(f"file '{part_a}'\n" + f"file '{part_b}'\n" * (n_hold + 1))
+    subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", lst, "-c", "copy", "-movflags", "+faststart", out_mp4], check=True)
+    tmp.cleanup()
+    iio.imwrite(out_png, frame)
+    pl.close()
+    n_run = len(range(0, R.rows, max(1, int(run_stride)))) if full_run else 0
+    return dict(kind=kind, row=k, rows=R.rows, cells=int(n_live[k]), size=size, fps=fps, dist_need=float(dist_need), dist_x1=None if dist_x1 is None else float(dist_x1), x1_scale_limited_by_fit=bool(x1) and dist <= dist_need, frames=n_run + n_orbit + n_hold, run_frames=n_run, orbit_frames=n_orbit, hold_frames=n_hold,
+                el=el, az0=az0, dist=dist, a_top=a_top, spec=spec_path)
 
 
 # ---------------------------------------------------------------------------------------------------------- the PAIR (one movie per decision)
@@ -1455,6 +1630,13 @@ def main():
     ap.add_argument("--activator-label", default="activator a", help="the name of the cell block chem[:, 0] in the legend and the middle inset")
     ap.add_argument("--section-slab", type=float, default=None, metavar="H", help="with --section: the second panel is a thin slice, the cells within H length units of the plane through the tissue's centre, seen face-on")
     ap.add_argument("--section-view", default=None, metavar="ELEV,AZIM", help="with --section: the cross-section panel's own camera; the slice is perpendicular to it (90,0 = from above, for a ring round z)")
+    ap.add_argument("--bare", action="store_true", help="the 3-D panel alone in a SQUARE window (height x height): no scale bar, no clock, the camera taking 0.95 of the limiting side (deck, the dotszoom twins); use with --no-insets")
+    ap.add_argument("--family", type=int, default=None, help="with --dots (MPM run): only the cells of this family (1-based, the number printed on it: the cells descending from one cell of frame 0), the camera framed on it alone")
+    ap.add_argument("--bare-bar", action="store_true", help="with --bare: keep the scale bar (and its label), still no clock, family labels or legend")
+    ap.add_argument("--fill", type=float, default=None, help="with --bare: the share of the window's side the framed points take (default 0.95, 0.92 with --family)")
+    ap.add_argument("--cell-cut", action="store_true", help="with --cut: the section cell by cell, a cell on the camera's side of the plane through the centre left out whole, the others whole (no clipping)")
+    ap.add_argument("--zoom", type=float, default=1.0, help="with --bare: the camera Z times closer to the centre of the framed points (1 = all of them in the window)")
+    ap.add_argument("--dots-nucleus", action="store_true", help="with --dots: the points of a cell's nucleus (the spec's plotting.contour_bodies.nucleus block) in its nucleus_color")
     ap.add_argument("--no-insets", action="store_true", help="no plot curves: the frame is the 3-D panel(s) and the clock")
     ap.add_argument("--mark-colours", nargs="*", default=[], metavar="TYPE=HEX", help="with --dots: the cells of these types in this colour, every other cell by its activity")
     ap.add_argument("--act-cmap", default=None, help="colour the activator through this matplotlib map (viridis: blue = not active, yellow = active) instead of white to red")
@@ -1475,6 +1657,15 @@ def main():
     ap.add_argument("--type-opacity", nargs="*", default=[], metavar="TYPE=OPACITY", help="the opacity of the cells of a type (1 = solid), over the spec's plotting.type_opacity: inner=1 draws the blue cell solid")
     ap.add_argument("--cut-keep", nargs="*", default=[], metavar="TYPE", help="with --cut: these cell types are not clipped at the plane: drawn whole when the plane reaches them or they lie behind it, left out when wholly on the camera's side")
     ap.add_argument("--clock-corner", default=CLOCK_CORNER, choices=["bottom-right", "top-left"], help="where the 'N cells   t = T min' text is drawn")
+    ap.add_argument("--orbit", type=float, default=None, metavar="SECONDS", help="one round of the camera (360 degrees of azimuth, eased) round the LAST stored row, over SECONDS s, then --hold s of the same frame: a single-view movie that ends static; --size px square, --fps, no colour bar, no insets, never archived (see render_orbit)")
+    ap.add_argument("--fit", type=float, default=0.84, metavar="F", help="with --orbit: the body's share of the window's height at the azimuth that needs the most room (default 0.84; the width limit is F x 0.90 / 0.84)")
+    ap.add_argument("--x1-window", default=None, metavar="W,H,SIDE", help="with --orbit: draw the body as large as the run's x1 movie does (its camera framed in a W x H px window, shown in a tile cut SIDE px square from it), unless --fit needs more room")
+    ap.add_argument("--full-run", action="store_true", help="with --orbit: first draw every stored row of the run (one frame each, camera at the starting pose), then the orbit of the last row")
+    ap.add_argument("--run-stride", type=int, default=1, metavar="N", help="with --orbit --full-run: draw every N-th stored row of the run (rows 0, N, 2N, ...; default 1 = every row); the orbit is still of the last row")
+    ap.add_argument("--no-clock", action="store_true", help="with --orbit: no 'N cells t = T' label (a montage lays it over the tile itself)")
+    ap.add_argument("--ui-scale", type=float, default=1.0, metavar="F", help="with --orbit: the scale bar's and the label's text (22 pt) x F")
+    ap.add_argument("--hold", type=float, default=2.0, metavar="SECONDS", help="with --orbit: the still frame held after the round")
+    ap.add_argument("--size", type=int, default=1080, metavar="PX", help="with --orbit: the movie's side, px (square)")
     ap.add_argument("--self-check", action="store_true")
     a = ap.parse_args()
     GROUND, AXIS_FONT, CLOCK_CORNER, COUNT_BY_TYPE = a.ground or GROUND, a.axis_font or AXIS_FONT, a.clock_corner, a.count_by_type
@@ -1519,7 +1710,11 @@ def main():
     SECTION_SLAB["h"] = a.section_slab; NO_INSETS["on"] = bool(a.no_insets)
     SECTION_VIEW["cam"] = tuple(float(v) for v in a.section_view.split(",")) if a.section_view else None
     TYPE_COLOURS.update({kv.split("=")[0]: kv.split("=")[1] for kv in a.type_colours})
-    DOTS["factor"] = a.dots
+    DOTS["factor"] = a.dots; DOTS["nucleus"] = bool(a.dots_nucleus); BARE["on"] = bool(a.bare); BARE["zoom"] = a.zoom; FAMILY["n"] = a.family; CELL_CUT["on"] = bool(a.cell_cut); BARE["bar"] = bool(a.bare_bar)
+    if a.fill:
+        BARE["fill"] = a.fill
+    if a.family:
+        BARE["fill"] = 0.92                                  # a family alone: 4 % of the window on each side between it and the frame
     WHITE_INK["on"] = bool(a.white_ink); WHITE_PLOT["on"] = bool(a.white_plot); ACT_LABEL["text"] = a.activator_label
     if a.white_ink:
         from plexus.gui import flat_ink
@@ -1530,6 +1725,15 @@ def main():
     CELL_LABELS["block"], CELL_LABELS["value_only"] = a.label_block, not a.label_with_id
     CELL_LABELS["once"] = bool(a.label_once)
     SECTION_ALPHA.update({kv.split("=")[0]: float(kv.split("=")[1]) for kv in a.section_alpha})
+    if a.orbit:                                              # `--orbit SECONDS`: one round round the last row, ending static; written to --out-dir, never archived as a step
+        o_mp4, o_png = f"{a.out_dir}/{tag}_exp29_orbit.mp4", f"{a.out_dir}/{tag}_exp29_orbit.png"
+        t0 = time.time()
+        info = render_orbit(a.run, o_mp4, o_png, seconds=a.orbit, hold=a.hold, fps=a.fps, size=a.size, cam=None if not a.cam else tuple(float(v) for v in a.cam.split(",")),
+                            fit=a.fit, clock=not a.no_clock, ui_scale=a.ui_scale, x1=tuple(float(v) for v in a.x1_window.split(',')) if a.x1_window else None, full_run=a.full_run, run_stride=a.run_stride)
+        info["wall_s"] = round(time.time() - t0)
+        print("ORBIT", info)
+        print({"mp4": o_mp4, "png": o_png})
+        return
     tmp_mp4, tmp_png = f"{a.out_dir}/{tag}_exp29.mp4", f"{a.out_dir}/{tag}_exp29.png"
     t0 = time.time()
     info = render(a.run, tmp_mp4, tmp_png, seconds=a.seconds, stride=a.stride, max_frames=a.max_frames,

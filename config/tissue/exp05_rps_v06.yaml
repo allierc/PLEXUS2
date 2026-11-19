@@ -1,0 +1,86 @@
+general:
+  name: exp05_rps_v06
+  seed: 1
+  n_frames: 54000
+  dt: 0.02
+  record_cap: 2001
+  boundary: free
+  dim: 3
+  world: [30.0, 30.0, 30.0]
+  units: {length_um: 10.0, time_s: 600.0}
+sets:
+  cell:
+    n: 20
+    buffer: 10000
+    types:
+      cell: {count: 20}
+    state:
+      pos: {width: 3, role: coordinate, integration: first_order, boundary: world}
+      size: {width: 1}
+      contacts: {width: 1}
+      founder: {width: 1}
+      chem: {width: 3, integration: first_order}
+      pol_p: {width: 3, integration: first_order}
+      pol_q: {width: 3, integration: first_order}
+fields: {}
+seed:
+- {op: seed_positions, model: shell, at: cell, spacing: 1.0, seed: 1}
+- {op: seed_cell_chem, at: cell, model: simplex, seed: 1, n_species: 3}
+operators:
+- {op: radius_graph, at: cell, radius: 1.1}
+- op: cell_chem_diffuse
+  at: cell
+  implementation: graph_laplacian
+  chi: 1.0
+  d: [0.02, 0.02, 0.02]
+  after_frame: 27000
+- {op: cell_chem_react, at: cell, model: rock_paper_scissor, a: 2.0, rate: 0.1, after_frame: 27000}
+- {op: thermal_bath, at: cell, kT: 0.005, mobility: 1.0, seed: 1}
+- op: pair_potential
+  implementation: polar_nissen
+  at: cell
+  lambda: [1.0, 0.0, 0.0]
+  spacing: 1.0
+  beta: 5.0
+  mobility: 10.0
+  polarity_rate: 2.0
+  cutoff: 2.0
+  every: 5
+  seed: 1
+  p_init: radial
+  alpha_chem:
+    block: chem
+    weights: [0.0, 0.0, 0.0]
+    after: 540.0
+- {op: lumen_pressure, implementation: volume, at: cell, pressure: 0.3, touch: 1.1, min_cells: 8, every: 25, spacing: 1.0, measure: min_axis}
+- op: cell_divide
+  implementation: point_adhesion
+  at: cell
+  rate: 0.00578
+  touch: 1.1
+  min_contacts: 2
+  offset: 0.5
+  size_cv: 0.1
+  seed: 1
+  rate_chem:
+    block: chem
+    weights: [0.01156, 0.00578, 0.0]
+    after: 540.0
+schedule: [radius_graph, cell_chem_diffuse, cell_chem_react, thermal_bath, pair_potential, lumen_pressure, cell_divide]
+plotting:
+  renderer: vtk_points
+  subject: cell
+  dot_radius: {cell: 0.5}
+  glyphs_only: true
+  background: '#8d99a6'
+  foreground: white
+  box_frame: false
+  camera: {elev: 25, azim: 30}
+  zoom: 1.6
+  duration_s: 10
+  slow_motion: 1
+  real_time: false
+  curve_time: {per_frame_s: 0.0033333, unit: s}
+  curve:
+  - {quantity: 'count:cell', ylabel: cells, xlabel: time (h), ymin: 0}
+  colors: {cell: '#3b528b'}

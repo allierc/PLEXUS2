@@ -1144,6 +1144,73 @@ class LumenPressureVolume(LumenPressurePointCluster):
         return {self.at: V}
 
 
+@register_operator("lumen_pressure", implementation="tube", family="mechanics", set="particle", kind="exchange",
+                   title="inflate each aggregate of point cells toward a fixed radius round an axis: a tube that keeps its girth as it lengthens",
+                   equation=r"""$$\mathbf v_i=k\,\max\!\Big(0,\frac{R^0-R_K}{R^0}\Big)\frac{\boldsymbol\rho_i}{\lVert\boldsymbol\rho_i\rVert},\qquad \boldsymbol\rho_i=(\mathbf I-\hat{\mathbf a}\hat{\mathbf a}^{\!\top})(\mathbf x_i-\bar{\mathbf x}_K),\qquad R_K=Q_{0.75}\big(\lVert\boldsymbol\rho_j\rVert\big)_{j\in K}$$""")
+class LumenPressureTube(LumenPressurePointCluster):
+    r"""a tube's lumen that regulates itself (exp05 route B, 2026-11-15): each aggregate is pushed outward from the LINE through its centre along `axis`
+    only while its radius about that line, R_K, is below a fixed target R0, so a body that lengthens along the axis keeps its girth and stays hollow.
+    lumen_pressure[volume] pushes from a centre POINT toward the radius of a sphere of the aggregate's cells: it rounds a tube up; the fixed pushes of
+    point_cluster and polarity opened a 20-cell cyst into a flat sheet (step 112).
+    particle -> particle, one set: reads pos; emits a velocity.
+
+        v_i = k max(0, (R0 - R_K)/R0) rho_i/|rho_i|,   rho_i = (I - a a^T)(x_i - c_K),   R_K = the 0.75 quantile of |rho_j| over the aggregate
+        k              `pressure`, the speed at a full deficit, world length per unit time
+        a              `axis`, unit vector
+        R0             `radius`; when absent, the radius of a closed one-cell-thick shell of the largest aggregate's cells at the operator's FIRST call,
+                       a sqrt(sqrt3 N / (8 pi)) with a = `spacing` (the radius the cyst has when the rule starts)
+        R_K            the aggregate's radius about the line: the 0.75 quantile, which is 0.97 R for a sphere of radius R and the tube's radius for a long
+                       tube, and which a furrow of cells folded inward does not lower as a mean would
+        c_K            the aggregate's centre
+
+    Reference: Chan, C. J. et al. (2019). Nature 571:112-116; Navis, A. & Nelson, C. M. (2016). Semin. Cell Dev. Biol. 55:139-147 (lumen pressure in tubes)."""
+    PARAM_UNITS = dict(LumenPressurePointCluster.PARAM_UNITS, spacing='length', radius='length')
+    PARAM_ROLES = dict(LumenPressurePointCluster.PARAM_ROLES, pressure="outward_speed_at_a_full_radius_deficit", spacing="neighbour_distance_of_the_shell_that_sets_the_first_radius",
+                       radius="target_radius_about_the_axis")
+
+    def __init__(self, params, device="cpu"):
+        super().__init__(params, device)
+        if self.axis is None:
+            self.axis = torch.tensor([0.0, 0.0, 1.0])
+        self.spacing = float(params.get("spacing", 1.0))
+        r0 = params.get("radius")
+        self.R0 = None if r0 is None else float(r0)
+
+    def forward(self, H, mask=None):
+        lvl = H.level(self.at)
+        X = lvl.get("pos")
+        live = lvl.occ > 0.5
+        if self._lab is None or self._calls % self.every == 0 or self._lab.shape[0] != X.shape[0]:
+            self._lab = self._labels(X, live)
+        self._calls += 1
+        lab = torch.where(live, self._lab, torch.full_like(self._lab, -1))
+        ok = lab >= 0
+        V = torch.zeros_like(X)
+        if not bool(ok.any()):
+            return {self.at: V}
+        k = int(lab.max()) + 1
+        li = lab.clamp_min(0)
+        w = ok.to(X.dtype)
+        N = torch.zeros(k, device=X.device, dtype=X.dtype).index_add_(0, li, w)
+        C = torch.zeros(k, X.shape[1], device=X.device, dtype=X.dtype).index_add_(0, li, X * w[:, None]) / N.clamp_min(1.0)[:, None]
+        if self.R0 is None:                                          # the first call fixes the target: the shell radius of the largest aggregate's cells
+            self.R0 = self.spacing * math.sqrt(math.sqrt(3.0) * float(N.max()) / (8.0 * math.pi))
+        ax = self.axis.to(X.device, X.dtype)
+        r = X - C[li]
+        rho = r - (r @ ax)[:, None] * ax[None]
+        ln = rho.norm(dim=1)
+        deficit = torch.zeros(k, device=X.device, dtype=X.dtype)
+        for kk in range(k):
+            m = ok & (lab == kk)
+            if int(m.sum()) >= 4:
+                deficit[kk] = max(0.0, (self.R0 - float(torch.quantile(ln[m], 0.75))) / self.R0)
+        g = ok & (ln > 0.05)
+        V = (self.p * deficit[li] * g.to(X.dtype))[:, None] * rho / ln.clamp_min(1e-9)[:, None]
+        if mask is not None:
+            V = V * mask[:, None].to(X.dtype)
+        return {self.at: V}
+
+
 from plexus.operators.diffusion_reaction import CellReactAlievPanfilov  # noqa: E402
 
 

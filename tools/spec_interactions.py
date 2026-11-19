@@ -525,7 +525,7 @@ def movie(raw: dict, run_dir: str, out: str, focus: int, other: int, zoom: bool 
             head = tag
         elif label_only:                                                                    # the time and the pair's tethers, nothing else printed (no title, no legend)
             ts_ = float((((raw.get('general') or {}).get('units') or {}).get('time_s', 0)) or 0); t_txt = (f"t = {d['row'] * row_stride * float((raw.get('general') or {}).get('dt', 1.0)) * ts_ / 60.0:g} min" if (row_stride and ts_) else H.time_label(raw, d['row'], d['rows']))      # a partial trajectory: row x row_stride frames
-            head = f"{t_txt}   junctions = {int(g['P']['bonded'][g['sel']].sum())}"
+            head = f"{t_txt}   bonds = {int(g['P']['bonded'][g['sel']].sum())}"
         elif graph:
             head = (f"MPM point graph: cell {focus} (dark), cell {other} (pale)\n{H.time_label(raw, d['row'], d['rows'])}  \u00b7  {len(g['mf']) + len(g['mo']):,} nodes"
                     f"  \u00b7  {int(g['P']['bonded'][g['sel']].sum()):,} edges")
@@ -569,7 +569,7 @@ def main():
     ap.add_argument("--tilt", type=float, default=0.0, help="with --movie, turn the view about the axis between the cells by this many degrees (a regular skin seen along its rows stacks them)")
     ap.add_argument("--row-stride", dest="row_stride", type=int, default=None, help="with --movie and --label-only, frames between two stored rows of a PARTIAL trajectory.npz (the label reads row x this)")
     ap.add_argument("--follow", action="store_true", help="with --movie and --window, centre the field on the pair's points of each row (the junction stays in view while the cells move)")
-    ap.add_argument("--label-only", dest="label_only", action="store_true", help="with --movie, print only the time and the number of tethers of the pair (`t = 350 min   junctions = 203`): no title, no legend")
+    ap.add_argument("--label-only", dest="label_only", action="store_true", help="with --movie, print only the time and the number of tethers of the pair (`t = 350 min   bonds = 203`): no title, no legend")
     ap.add_argument("--tag", default="", help="with --movie, this one text in large type in place of the title and the legend")
     ap.add_argument("--before", action="store_true", help="with --movie, draw the rows before the neighbour exists too: the cell alone, in the frame of the pair it becomes (a cell before its division)")
     ap.add_argument("--movie", choices=("cells", "interface", "graph"), default=None,
