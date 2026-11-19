@@ -47,18 +47,24 @@ SCENES = {
     "opt_s20k": dict(f=3.6, why="rna1_3d x 3.6: 19,995 bodies (83 strands of each mRNA type, 630 proteins of each type) in a box 647 x 364 x 192 nm"),
     "opt_s55k": dict(f=10.0, why="rna1_3d x 10: 55,450 bodies (230 strands of each mRNA type, 1,750 proteins of each type) in a box 1,078 x 607 x 192 nm"),
     "opt_s554k": dict(f=100.0, why="rna1_3d x 100: 554,500 bodies (2,300 strands of each mRNA type, 17,500 proteins of each type) in a box 3,410 x 1,920 x 192 nm"),
+    # the periodic box rna1_3dp with f times the bodies: its sides whole multiples of 8 nm (0.8 length units: the contact lattice needs whole point spacings of 0.2, and
+    # the periodic search a hash-grid cell that divides the three sides and is not smaller than its radius 0.55), the volume within 1.5 % of f times rna1_3dp's
+    "opt_p20k": dict(f=3.6, parent="rna1_3dp", box=(64.8, 36.8, 19.2), why="rna1_3dp x 3.6: 19,995 bodies in a periodic box 648 x 368 x 192 nm"),
+    "opt_p55k": dict(f=10.0, parent="rna1_3dp", box=(107.2, 60.8, 19.2), why="rna1_3dp x 10: 55,450 bodies in a periodic box 1,072 x 608 x 192 nm"),
 }
 
 
 def build(scene):
     """The seed table and the spec of a scaled scene, written to tmp/exp09_opt/ (E.DATA is pointed there while E.build runs: nothing is written into the record)."""
     f = float(SCENES[scene]["f"])
-    base = E.params("rna1_3d")
-    E.ITERS[scene] = dict(parent="rna1_3d", why=SCENES[scene]["why"],
-                          box=(base["box"][0] * math.sqrt(f), base["box"][1] * math.sqrt(f), base["box"][2]),
+    parent = SCENES[scene].get("parent", "rna1_3d")
+    base = E.params(parent)
+    E.ITERS[scene] = dict(parent=parent, why=SCENES[scene]["why"],
+                          box=SCENES[scene].get("box") or (base["box"][0] * math.sqrt(f), base["box"][1] * math.sqrt(f), base["box"][2]),
                           counts={k: int(round(v * f)) for k, v in base["counts"].items()},
                           chains=[dict(ch, n=int(round(ch["n"] * f))) for ch in base["chains"]],
-                          junction_buffer=int(2 ** math.ceil(math.log2(16384 * f))), section=None, panels3d=False)
+                          junction_buffer=int(2 ** math.ceil(math.log2(16384 * f))), section=None, panels3d=False,
+                          seed_batched=f > 5.0)       # from_points_ragged_batched above about 50,000 bodies: the default seed costs bodies x points (26 minutes at 554,500)
     os.makedirs(OPT, exist_ok=True)
     keep = E.DATA
     E.DATA = OPT
@@ -74,9 +80,10 @@ def build(scene):
 
 
 def scene_spec(scene):
-    if scene == "rna1_3d":
-        return yaml.safe_load(open(os.path.join(ROOT, "config", "tissue", "exp09_land_rna1_3d.yaml")))
-    return yaml.safe_load(open(os.path.join(OPT, f"spec_{scene}.yaml")))
+    """The spec of a scene: one of SCENES (built into tmp/exp09_opt/), else the written spec config/tissue/exp09_land_<scene>.yaml as it is (rna1_3d, rna1_3dp)."""
+    if scene in SCENES:
+        return yaml.safe_load(open(os.path.join(OPT, f"spec_{scene}.yaml")))
+    return yaml.safe_load(open(os.path.join(ROOT, "config", "tissue", f"exp09_land_{scene}.yaml")))
 
 
 # ---- the configurations -------------------------------------------------------------------------------------------------------------------------------------------
@@ -128,6 +135,9 @@ TOKENS = {
     "scs":   lambda sp: _impl(sp, "mpm_scatter", "warp_pp_sparse"),
     "gas":   lambda sp: (_impl(sp, "mpm_gather", "warp_pp_solve"), _impl(sp, "mpm_grid_update", "solved_in_gather")),
     "cfw":   lambda sp: _impl(sp, "contact_finder", "sites_wide"),
+    "cfcpu": lambda sp: [o.__setitem__("search", "cpu") for o in _op(sp, "contact_finder")],        # a periodic box searched by the CPU kd-tree, as until 2026-11-19 (step 26)
+    "bm2":   lambda sp: [o.__setitem__("block_margin", 2) for o in _op(sp, "pair_potential")],       # the contact blocks 2 lattice nodes wider than the widest body at the start (default 1): room for
+                                                                                                    # a body that swells, so that the blocks are not enlarged mid-run and a captured graph dropped
     "cap":   lambda sp: _block(sp).__setitem__("capture", True),
     "dt02":  lambda sp: _substep(sp, 0.02),
     "dt0125": lambda sp: _substep(sp, 0.0125),                                                    # 80 substeps per frame
@@ -213,7 +223,23 @@ def traj_health(run, rows=(50, 125, 250)):
         return cen, np.sqrt(np.bincount(q, weights=((x - cen[q]) ** 2).sum(1), minlength=nC) / cnt)
     c0, rg0 = geom(0)
     bl0 = np.linalg.norm(c0[b] - c0[a], axis=1)
+    npt = np.bincount(pid[0][occ[0]], minlength=nC)
+    prot, sub = npt > 27, (npt > 0) & (npt <= 27)                 # the 64-point proteins, the 27-point mRNA subunits
     out = []
+    # the motion over 40 frames (10 rows), from frame 200 on: the rms over the bodies of a class of the distance a body's centre moved, averaged over the windows
+    # starting at rows 50, 60, ... (frames 200, 240, ...); a chain bond is centre to centre and a body is never cut by a periodic face, so nothing is unwrapped here
+    last = occ.shape[0] - 1
+    starts = [r for r in range(50, last - 9, 10)]
+    if starts:
+        cs = {r: geom(r)[0] for r in sorted(set(starts) | {r + 10 for r in starts})}
+        mv = {nm: [float(np.sqrt(((cs[r + 10][m] - cs[r][m]) ** 2).sum(1).mean()) * E.NM) for r in starts] for nm, m in (("protein", prot), ("subunit", sub))}
+        jo_l = z["junction__occ"][last] > 0.5
+        held_l = int((z["junction__rho"][last][..., 0][jo_l] > 0.5).sum())
+        q = dict(row=-1, frame=int(4 * last), protein_move40_nm=float(np.mean(mv["protein"])), protein_move40_first_nm=mv["protein"][0], subunit_move40_nm=float(np.mean(mv["subunit"])),
+                 subunit_move40_first_nm=mv["subunit"][0], windows=len(starts), held=held_l, proteins=int(prot.sum()), bonds_per_protein=held_l / max(int(prot.sum()), 1))
+        out.append(q)
+        print(f"{run}: over 40 frames a protein moves {q['protein_move40_nm']:.2f} nm rms (mean of {len(starts)} windows from frame 200; the first window {q['protein_move40_first_nm']:.2f}), "
+              f"an mRNA subunit {q['subunit_move40_nm']:.2f} nm (first window {q['subunit_move40_first_nm']:.2f}); held bonds {held_l} at frame {4 * last}, {q['bonds_per_protein']:.2f} per protein", flush=True)
     for r in rows:
         if r >= occ.shape[0]:
             continue
@@ -308,8 +334,7 @@ def one(scene, cfg, out, frames, health, profile=False):
     """Run one configuration: frame times, peak memory, the state after the last frame (and the health rows, or the per-operator profile) to `out`."""
     import torch
     import plexus.operators  # noqa: F401
-    if any(t not in ("cc", "cap", "s2") and not t.startswith(("dt", "g1")) for t in tokens_of(cfg)):
-        __import__(NEW_OPS)
+    __import__(NEW_OPS)
     from plexus import schema
     from plexus.engine import run
     sp = spec_of(scene, cfg, frames)
@@ -493,9 +518,10 @@ if __name__ == "__main__":
         write(a.scene, a.rest[0], a.rest[1])
     elif a.cmd == "generate":                                # generate <name>
         generate(a.scene)
-    elif a.cmd == "trajhealth":                              # trajhealth <run> [<run> ...]: data/opt_trajhealth.json
-        res = {r: traj_health(r) for r in [a.scene] + a.rest}
-        json.dump(res, open(os.path.join(E.DATA, "opt_trajhealth.json"), "w"), indent=1)
+    elif a.cmd == "trajhealth":                              # trajhealth <tag> <run> [<run> ...]: data/opt_<tag>.json  (one argument: a run, data/opt_trajhealth.json)
+        tag, runs = (a.scene, a.rest) if a.rest and not a.scene.startswith("exp09_land_") else ("trajhealth", [a.scene] + a.rest)
+        res = {r: traj_health(r) for r in runs}
+        json.dump(res, open(os.path.join(E.DATA, f"opt_{tag}.json"), "w"), indent=1)
     elif a.cmd == "one":
         one(a.scene, a.rest[0], a.rest[1], a.frames, a.health, "kernels" if a.kernels else a.profile)
     elif a.cmd in ("profile", "kprofile"):

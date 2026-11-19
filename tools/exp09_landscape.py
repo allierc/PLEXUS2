@@ -46,6 +46,9 @@ sys.path[:0] = [os.path.join(ROOT, "src"), os.path.join(ROOT, "tools"), os.path.
 LOG = os.path.join(ROOT, "log", "experiments", "exp09_land")
 RECORD = os.path.join(ROOT, "experiments", "exp09_molecular_landscape")
 DATA = os.path.join(RECORD, "data")
+SCRIPT = "tools/exp09_landscape.py"   # the script a cluster job calls back; JOB the prefix of its LSF job names; LABEL the experiment in a spec's headline.
+JOB = "exp09_"                         # tools/exp10_oocyte.py runs this module under its own record, names and units by setting these (and RECORD, DATA, LOG, NM, UM, TIME_US, run_name)
+LABEL = "exp09"
 GD = os.path.join(ROOT, "graphs_data", "tissue")
 
 NM = 10.0                      # nanometres per length unit
@@ -221,6 +224,10 @@ BASE = dict(
     matrix_panel=False,        # True: at the right of every movie frame the scene's binding matrix (free energies or affinities) and, live, the bonds held per pair of kinds
                                # with their total (matrix_hook)
     panels3d=False,            # True: the movie in two panels -- at left the whole box seen from 30 degrees above, at right the slice `section` from above (render_panels)
+                               # "matrix": the whole box alone, filling the frame, with the matrix panel of `matrix_panel` at its right (render_part)
+    n_grid=None,               # the cells along an axis of each body's own grid (default 15, a 30 nm box at 2 nm per cell): 24 for a body up to 20 points long (exp10's Tudor, 15)
+    seed_batched=False,        # seed_positions[from_points_ragged_batched]: every body written in one call (the default writes body by body and copies the point state each time:
+                               # 26 minutes for 554,500 bodies, exp09_opt)
     trim_slots=False,          # True: each body's point slots are the scene's largest body's count, not NMAX (343): the same bodies on fewer slots, faster
     section=None,              # (z0, z1) above the slab's floor, length units: the movie draws only the bodies whose centre lies between (a deep box seen through a slice)
     seed_from=None,            # dict(run, row, kinds, per_bin, singles): the bodies seeded are bonded GROUPS taken whole from another run's row (its points as they are),
@@ -568,6 +575,7 @@ ITERS = {
     # THE PERIODIC TWIN of rna1_3d (Cedric, 2026-11-19: "can we run a twin of last step but with no boundary"; "Periodic box"): no walls, every axis periodic, a box of whole
     # lattice spacings (340 x 192 x 192 nm), the same counts (0.3 % more crowded)
     "rna1_3dp": dict(parent="rna1_3d", box=(34.0, 19.2, 19.2), margin=0.0, periodic=True, fast=dict(pp=True, strain=True, capture=False, ccwarp=True),
+                     panels3d="matrix",        # redrawn 2026-11-19 (Cedric: "rerender exp09-26 with the new render"): the 3D panel alone with the matrix panel, not step 25's two panels
                      why="THE PERIODIC TWIN of step 25: the same 5,545 bodies in a box 340 x 192 x 192 nm with NO WALLS -- every face joined to the opposite one (the contact finder, "
                          "the contact penalty and the bonds' springs wrapping every axis; a body is never cut by a face, the movie draws each one shifted into the box); at left "
                          "the whole box from 30 degrees above, at right the 52 nm slice at mid-depth. Do the walls change how the mRNA and the proteins move and bind"),
@@ -671,11 +679,15 @@ def body_points(shape, n, spacing=SPACING):
     lat = np.stack(np.meshgrid(g, g, g, indexing="ij"), -1).reshape(-1, 3)
     if kind == "ellipsoid":
         score = np.linalg.norm(lat / np.asarray(par, float)[None], axis=1)
-    elif kind == "lobes":
+    elif kind in ("lobes", "lobes_wide"):                                                          # lobes_wide: the same on a lattice as wide as the lobes reach (a body over 19 points long; exp10's Tudor)
         cen = np.array([c for c, _ in par], float)
         rad = np.array([r for _, r in par], float)
         cen = cen - (cen * rad[:, None] ** 3).sum(0) / (rad ** 3).sum()                         # the lobes' volume-weighted centre at the lattice's origin
         s = (n * PV / (4.0 / 3.0 * np.pi * (rad ** 3).sum())) ** (1.0 / 3.0)                    # the first lobe's radius if the lobes did not overlap; they do, so the n points fill them a little further out
+        if kind == "lobes_wide":
+            half = int(np.ceil(float((np.abs(s * cen) + s * rad[:, None]).max()) / spacing)) + 2
+            g = np.arange(-half, half + 1) * spacing
+            lat = np.stack(np.meshgrid(g, g, g, indexing="ij"), -1).reshape(-1, 3)
         score = (np.linalg.norm(lat[:, None] - s * cen[None], axis=2) / (s * rad[None])).min(1)
     elif kind == "torus":
         R, r = (float(v) for v in par)
@@ -996,6 +1008,7 @@ def seed_table(key):
              cell__adh=np.ones((len(bodies), 6)),
              cell__valence=np.array([float(((p.get("binding") or {}).get("valence") or {}).get(nm, 0.0)) for nm in names for q, _ in placed if q == nm]),      # the cell block `valence` of a scene whose binding has one
              **({"cell__site": _sites_of(p, names, got)} if p.get("sites") else {}),
+             **({"cell__molecule": _sites_of(dict(p, sites=dict(k=10 ** 9)), names, got)} if (p.get("binding") or {}).get("molecule") else {}),      # a chain's first subunit (a site of the whole chain); any other body, itself
              **({"cell__chem": _rps_start(len(bodies), int(p["seed"]))} if (p.get("signal") or {}).get("model") == "rps" else {}),
              cell__grate=np.array([float(((p.get("grow") or {}).get("kinds") or {}).get(nm, 0.0)) for nm in names for q, _ in placed if q == nm]),      # the cell block `grate` of a scene with `grow`
              cell__drive=np.array([float(((p.get("push") or {}).get("types") or {}).get(nm, 0.0)) for nm in names for q, _ in placed if q == nm]))     # the cell block `drive` of a scene with `push`                    # `cell__adh`: the cell block `adh` (bond_binding's ceiling per face class) when the scene has binding; 1 everywhere
@@ -1227,7 +1240,7 @@ def build(key):
     sub = float(p["substep"])
     sp = spacing_of(p)                                              # the point spacing: 0.2 (2 nm), or a coarse scene's own
     L = sp / SPACING                                                # every length tied to the spacing times L, every area times L^2 (1 for every scene but a coarse one)
-    ngrid = int((p.get("coarse") or {}).get("n_grid", 15))
+    ngrid = int((p.get("coarse") or {}).get("n_grid", p.get("n_grid") or 15))     # `n_grid`: a scene whose longest body passes 11 points (the gather keeps a point within n_grid / 2 - 2 cells of its body's centre)
     gcell = sp * float((p.get("coarse") or {}).get("cell", 1))     # the grid's cell: the point spacing, or a coarse scene's `cell` of them
     # the contact lattice: the point spacing (L = sp / 0.2), or with coarse.contact_dx "grid" the grid's cell, where a 7-point body's volume fraction nears 1 (at the point
     # spacing it peaks at 0.42, so two overlapping bodies stay under the 0.2 the penalty tolerates: bsmoke, 2026-11-17 20:55); the overlap stiffness x (lattice / 0.2)^2
@@ -1256,7 +1269,7 @@ def build(key):
     return {
         "general": {
             "name": name,
-            "headline": f"exp09 {key}: a crowded molecular landscape of {n:,} MPM bodies ({share * 100:.0f} % of a slab {box[0] * NM:,.0f} x {box[1] * NM:,.0f} x {box[2] * NM:.0f} nm)",
+            "headline": f"{LABEL} {key}: a crowded molecular landscape of {n:,} MPM bodies ({share * 100:.0f} % of a slab {box[0] * NM:,.0f} x {box[1] * NM:,.0f} x {box[2] * NM:.0f} nm)",
             "title": why_of(key),
             "seed": int(p["seed"]), "n_frames": int(p["frames"]), "dt": 1.0, "record_cap": int(p["frames"]) // int(p["every"]) + 1,
             **({"warmup": int(p["warmup"])} if p.get("warmup") else {}),
@@ -1278,6 +1291,7 @@ def build(key):
                     **({"adh": {"width": 6, "record": False}} if p.get("binding") else {}),
                     **({"valence": {"width": 1, "record": False}} if (p.get("binding") or {}).get("valence") else {}),
                     **({"site": {"width": 1, "record": False}} if p.get("sites") else {}),
+                    **({"molecule": {"width": 1, "record": False}} if (p.get("binding") or {}).get("molecule") else {}),
                     **({"chem": {"width": 3 if sg.get("model") == "rps" else 2, "integration": "first_order"}} if sg else {}),
                     **({"drive": {"width": 1, "record": False}} if p.get("push") and not p["push"].get("block") else {}),
                     **({"mass": {"width": 1}, "mass0": {"width": 1, "record": False}, "born": {"width": 1, "record": False}, "div_ready": {"width": 1, "record": False},
@@ -1324,7 +1338,7 @@ def build(key):
                 **({"implementation": "sites", "site_block": "site"} if p.get("sites") else {"implementation": "hashgrid"}), **({"periodic": True} if p.get("periodic") else {})},
                # `binding.delta_g` = (kind names, matrix of binding free energies, None = never binds): bond_binding[delta_g] (NEW variant, binding_delta_g_ops.py, 2026-11-19) --
                # the unbinding rate of a junction is binding_rate x exp(Delta G / kT) of its two kinds, in `delta_g_unit` (kcal/mol) at `temperature_K` (310.15); no `off`, no type matrix
-               ({"op": "bond_binding", "implementation": "delta_g", "at": "junction", "cells": "cell", "binding_rate": float(bd["on"]), "bond_strength": float(bd["strength"]),
+               ({"op": "bond_binding", "implementation": "delta_g_molecule" if bd.get("molecule") else "delta_g", **({"molecule_block": "molecule"} if bd.get("molecule") else {}), "at": "junction", "cells": "cell", "binding_rate": float(bd["on"]), "bond_strength": float(bd["strength"]),
                  "bell": "area", "min_area": float(bd["min_area"]),
                  "delta_g": [[(None if (a_ not in bd["delta_g"][0] or b_ not in bd["delta_g"][0] or bd["delta_g"][1][bd["delta_g"][0].index(a_)][bd["delta_g"][0].index(b_)] is None)
                                else float(bd["delta_g"][1][bd["delta_g"][0].index(a_)][bd["delta_g"][0].index(b_)])) for b_ in names] for a_ in names],
@@ -1386,7 +1400,7 @@ def build(key):
             "aggregate_centroid",
             *(["cell_cycle", "cell_grow", "cell_populate", "cell_divide"] if gw else []),
         ],
-        "seed": [{"op": "seed_positions", "model": "from_points_ragged_batched" if p.get("coarse") else "from_points_ragged", "at": "pt", "cell_set": "cell", "points": table, "um_per_unit": UM,
+        "seed": [{"op": "seed_positions", "model": "from_points_ragged_batched" if (p.get("coarse") or p.get("seed_batched")) else "from_points_ragged", "at": "pt", "cell_set": "cell", "points": table, "um_per_unit": UM,
                   "centre_um": [0.0, 0.0, 0.0], "centre": [0.0, 0.0, 0.0], **({"value_block": "bonded"} if p.get("bonds") else {})}],
         "plotting": {
             "renderer": "vtk_points", "subject": "pt", "render_3d": "contour",
@@ -1420,6 +1434,10 @@ def _fast(sp, fast):
         if fast.get("ccwarp") and o["op"] == "pair_potential" and o.get("model") == "cell_contact":
             o.pop("model")
             o["implementation"] = "cell_contact_warp_pp"
+    if fast.get("tokens"):                                         # tools/exp09_opt.py's Warp variants of the substep operators (substep_warp_ops.py, 2026-11-19), by its tokens:
+        import exp09_opt as O                                        # "ccf+bath+bs+aj+sc+gas" is its fastest set without the walls (13 x on rna1_3d with them and the capture)
+        for t in O.tokens_of(str(fast["tokens"])):
+            O.TOKENS[t](sp)
     for st in sp["schedule"]:
         if isinstance(st, dict) and "substep_dt" in st and "capture" in fast:
             st["capture"] = bool(fast["capture"])
@@ -1590,7 +1608,7 @@ def _clock(frame, text):
     return np.array(im)
 
 
-def render(key, run=None, name=None, last_only=False, max_frames=300, fps=25, rows_sel=None, view=None, frame_wh=None, use_section=True, bar=True):
+def render(key, run=None, name=None, last_only=False, max_frames=300, fps=25, rows_sel=None, view=None, frame_wh=None, use_section=True, bar=True, fit_box=False):
     """The movie of a run in the flat-ink look, full frame: per drawn row every body's iso-surface (exp23_studio._cell_surface, as the record's movies draw an MPM cell),
     filled flat in its kind's colour, then gui/flat_ink's ink -- folds and silhouettes from the depth buffer, and a line wherever two DIFFERENT bodies meet, found on a
     second render of the same surfaces with every body in its own id colour (flat_ink tells objects apart by hue, which cannot separate two bodies of one kind) -- and the
@@ -1635,6 +1653,11 @@ def render(key, run=None, name=None, last_only=False, max_frames=300, fps=25, ro
         view, up = S.view_vectors(float(view[0]), float(view[1]))
         Rb = 0.5 * float(np.linalg.norm(hi - lo))
         dist = Rb / tn / min(1.0, W / Hh)
+        if fit_box:                                              # the box's eight corners, seen in perspective, just inside the frame (the sphere leaves a wide frame half empty)
+            right = np.cross(up, view)
+            right /= np.linalg.norm(right)
+            cor = np.array([[(lo, hi)[i][0], (lo, hi)[j][1], (lo, hi)[k_][2]] for i in (0, 1) for j in (0, 1) for k_ in (0, 1)]) - c0
+            dist = 1.06 * max(max(c @ view + abs(c @ np.asarray(up)) / tn, c @ view + abs(c @ right) * Hh / (W * tn)) for c in cor)
         near, far = dist - Rb, dist + Rb
     px_per_unit = Hh / (2.0 * dist * tn)                        # at the box's centre
     wpp = 1.0 / px_per_unit
@@ -1887,6 +1910,18 @@ def render_part(key, i, n, fps):
     part = list(range(rows))[i * rows // n:(i + 1) * rows // n]
     if not part:
         return None
+    if params(key).get("panels3d") == "matrix":                # Cedric, 2026-11-19: "only the 3D panel + the matrices" -- the whole box from VIEW_3D filling the frame, the matrix panel at its right
+        global FRAME_HOOK
+        FRAME_HOOK = matrix_hook(key)
+        try:
+            a = render(key, name=f"p3d_{key}_{i}", max_frames=10 ** 6, fps=fps, rows_sel=part, view=VIEW_3D, frame_wh=FRAME, use_section=False, bar=False, fit_box=True)
+        finally:
+            FRAME_HOOK = None
+        out = os.path.join(DATA, f"panels_{key}_{i}.mp4")
+        os.replace(os.path.join(ROOT, a["mp4"]), out)
+        if a.get("png") and os.path.exists(os.path.join(ROOT, a["png"])):
+            os.remove(os.path.join(ROOT, a["png"]))
+        return out
     a = render(key, name=f"p3d_{key}_{i}", max_frames=10 ** 6, fps=fps, rows_sel=part, view=VIEW_3D, frame_wh=PANEL, use_section=False, bar=False)
     b = render(key, name=f"psl_{key}_{i}", max_frames=10 ** 6, fps=fps, rows_sel=part, frame_wh=PANEL, use_section=True)
     out = os.path.join(DATA, f"panels_{key}_{i}.mp4")
@@ -1906,7 +1941,7 @@ def render_panels(key, fps, procs=8):
     import imageio.v2 as iio
     env = dict(os.environ, PYTHONPATH=os.pathsep.join([os.path.join(ROOT, "src"), os.path.join(ROOT, "tools")]))
     logs = [open(os.path.join(DATA, f"panels_{key}_{i}.log"), "w") for i in range(procs)]
-    jobs = [subprocess.Popen([sys.executable, "-u", __file__, "render_part", key, "--piece", f"{i}/{procs}", "--fps", str(fps)], env=env, cwd=ROOT, stdout=logs[i], stderr=logs[i])
+    jobs = [subprocess.Popen([sys.executable, "-u", os.path.join(ROOT, SCRIPT), "render_part", key, "--piece", f"{i}/{procs}", "--fps", str(fps)], env=env, cwd=ROOT, stdout=logs[i], stderr=logs[i])
             for i in range(procs)]
     bad = [i for i, j in enumerate(jobs) if j.wait() != 0]
     if bad:
@@ -2476,7 +2511,7 @@ def render_chunk_vtk(key, fname, procs=4):
     od = os.path.join(DATA, f"big_{key}")
     os.makedirs(od, exist_ok=True)
     env = dict(os.environ, PYTHONPATH=os.pathsep.join([os.path.join(ROOT, "src"), os.path.join(ROOT, "tools")]))
-    jobs = [subprocess.Popen([sys.executable, "-u", __file__, "render_piece", key, fname, "--piece", f"{i}/{procs}"], env=env, cwd=ROOT,
+    jobs = [subprocess.Popen([sys.executable, "-u", os.path.join(ROOT, SCRIPT), "render_piece", key, fname, "--piece", f"{i}/{procs}"], env=env, cwd=ROOT,
                              stdout=subprocess.DEVNULL, stderr=open(os.path.join(od, f"{fname[:-4]}_{i}.log"), "w")) for i in range(procs)]
     bad = [i for i, j in enumerate(jobs) if j.wait() != 0]
     if bad:
@@ -2509,7 +2544,7 @@ def big_motion(key):
           f"median {np.median(tot):.1f} p99 {np.percentile(tot, 99):.1f} max {tot.max():.1f} nm | {np.median(ms[2:]) if len(ms) > 3 else float('nan'):.0f} ms per frame")
 
 
-if __name__ == "__main__":
+def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("cmd", choices=["list", "write", "measure", "after", "render", "look", "shapes", "first", "live", "render_chunk", "render_piece", "drawall", "motion", "render_part"])
     ap.add_argument("names", nargs="*")
@@ -2562,3 +2597,7 @@ if __name__ == "__main__":
         print(render_piece(keys[0], keys[1], i, n))
     elif a.cmd == "render_chunk":
         print(render_chunk(keys[0], keys[1], run=a.run))
+
+
+if __name__ == "__main__":
+    main()

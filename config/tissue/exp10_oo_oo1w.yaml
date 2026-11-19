@@ -1,0 +1,870 @@
+general:
+  name: exp10_oo_oo1w
+  headline: 'exp10 oo1w: a crowded molecular landscape of 11,672 MPM bodies (11 % of a slab 255 x 144 x 144 nm)'
+  title: 'THE FIRST exp10 SCENE WITH WALLS: oo1''s cast, counts, shapes and binding free energies (32 strands of each of 6 mRNAs, 300 of each of 10 proteins, 11,672 bodies) in the same box 255 x 144 x 144 nm, held by soft walls instead of joined face to face. With walls every operator of a frame runs on the GPU, the contact search included, as validated on exp09''s step 25. Do the same bonds form as in the periodic box, and how much faster does the frame go'
+  seed: 1
+  n_frames: 1000
+  dt: 1.0
+  record_cap: 251
+  save_every_min: 10.0
+  boundary: free
+  dim: 3
+  world:
+  - 52.2
+  - 30.0
+  - 30.0
+  units:
+    length_um: 0.005
+    time_s: 2.5e-08
+fields:
+  mpm_grid:
+    frame: mpm_grid
+    n_grid: 24
+    per_parent: cell
+    cell_box: 4.8
+sets:
+  cell:
+    n: 11672
+    type_layout: ordered
+    types:
+      osk:
+        count: 1824
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      nos:
+        count: 1472
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      pgc:
+        count: 448
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      gcl:
+        count: 1568
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      CycB:
+        count: 1632
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      Hsp83:
+        count: 1728
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      Osk:
+        count: 300
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      Vas:
+        count: 300
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      Tud:
+        count: 300
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      Aub:
+        count: 300
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      Bru:
+        count: 300
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      Stau:
+        count: 300
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      Hrp48:
+        count: 300
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      Cup:
+        count: 300
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      Glo:
+        count: 300
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      Smg:
+        count: 300
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: rate
+        record: false
+      bonded:
+        width: 1
+        record: false
+      adh:
+        width: 6
+        record: false
+      valence:
+        width: 1
+        record: false
+      site:
+        width: 1
+        record: false
+      molecule:
+        width: 1
+        record: false
+  pt:
+    entity: mpm_particle
+    parent: cell
+    per_parent: 334
+    density: 1.0
+    radius: 0.5
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: rate
+        record: false
+      pid:
+        width: 1
+      cellc:
+        width: 1
+        record: false
+      face:
+        width: 1
+        record: false
+  junction:
+    n: 0
+    buffer: 65536
+    state:
+      ca:
+        width: 1
+        integration: none
+      cb:
+        width: 1
+        integration: none
+      fg:
+        width: 1
+        integration: none
+        record: false
+      rho:
+        width: 1
+        integration: first_order
+      area:
+        width: 1
+        integration: none
+      load:
+        width: 1
+        integration: none
+operators:
+- op: thermal_bath
+  at: pt
+  friction: 0.0125
+  kT: 2.5e-05
+  substep_dt: 0.01
+  seed: 1
+  implementation: langevin_warp
+- op: active_force
+  at: pt
+  wall_stiffness: 400.0
+  lo:
+  - 0.6
+  - 0.6
+  - 0.6
+  hi:
+  - 51.6
+  - 29.400000000000002
+  - 29.400000000000002
+  model: box_slab_warp
+- op: pair_potential
+  at: pt
+  cells: cell
+  repulsion_strength: 600.0
+  contact_slack: 0.2
+  contact_surface_tension:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  contact_edge_width: 0.2
+  implementation: cell_contact_warp_pp_fixed
+- op: apical_junction
+  at: pt
+  cells: cell
+  k: 4.0
+  reach: 0.24
+  shell: 1000000000.0
+  skip_block: bonded
+  implementation: warp
+- op: contact_finder
+  at: junction
+  points: pt
+  cells: cell
+  spacing: 0.2
+  bond_range: 0.45
+  implementation: sites
+  site_block: site
+- op: bond_binding
+  implementation: delta_g_molecule
+  molecule_block: molecule
+  at: junction
+  cells: cell
+  binding_rate: 1.0
+  bond_strength: 0.01
+  bell: area
+  min_area: 0.12
+  delta_g:
+  - - -9.6
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - -9.4
+    - -10.9
+    - -9.4
+    - null
+    - null
+    - null
+  - - null
+    - -5.0
+    - null
+    - null
+    - null
+    - null
+    - -9.4
+    - -5.0
+    - null
+    - -5.0
+    - null
+    - null
+    - null
+    - null
+    - -9.0
+    - -9.4
+  - - null
+    - null
+    - -5.0
+    - null
+    - null
+    - null
+    - -9.4
+    - -5.0
+    - null
+    - -5.0
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+  - - null
+    - null
+    - null
+    - -5.0
+    - null
+    - null
+    - -9.4
+    - -5.0
+    - null
+    - -5.0
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+  - - null
+    - null
+    - null
+    - null
+    - -5.0
+    - null
+    - null
+    - -5.0
+    - null
+    - -5.0
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+  - - null
+    - null
+    - null
+    - null
+    - null
+    - -5.0
+    - null
+    - -5.0
+    - null
+    - -5.0
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+  - - null
+    - -9.4
+    - -9.4
+    - -9.4
+    - null
+    - null
+    - -6.3
+    - -6.8
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - -6.3
+  - - null
+    - -5.0
+    - -5.0
+    - -5.0
+    - -5.0
+    - -5.0
+    - -6.8
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+  - - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - -5.9
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+  - - null
+    - -5.0
+    - -5.0
+    - -5.0
+    - -5.0
+    - -5.0
+    - null
+    - null
+    - -5.9
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+  - - -9.4
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - -6.3
+    - null
+    - null
+    - -6.3
+    - null
+    - null
+  - - -10.9
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+  - - -9.4
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+  - - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - -6.3
+    - null
+    - null
+    - null
+    - null
+    - -6.3
+  - - null
+    - -9.0
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+  - - null
+    - -9.4
+    - null
+    - null
+    - null
+    - null
+    - -6.3
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - -6.3
+    - null
+    - null
+  delta_g_unit: kcal/mol
+  temperature_K: 298.15
+  delta_g_reference: standard
+  binding_volume_nm3: 11.39
+  stochastic: true
+  seed: 1
+  valence_block: valence
+- op: bond_springs
+  at: pt
+  junctions: junction
+  bond_stiffness: 0.001
+  bond_damping: 0.0
+  spacing: 0.2
+  bond_rest_length: 0.22
+  bond_range: 0.45
+  implementation: warp
+- op: mpm_strain
+  at: pt
+  implementation: warp
+- op: mpm_scatter
+  at: mpm_grid
+  from: pt
+  drag: 0.0
+  implementation: warp_pp_lean
+- op: mpm_grid_update
+  at: mpm_grid
+  implementation: solved_in_gather
+- op: mpm_gather
+  at: pt
+  from: mpm_grid
+  implementation: warp_pp_solve
+- op: aggregate_centroid
+  at: cell
+  child: pt
+schedule:
+- contact_finder
+- bond_binding
+- pair_potential
+- bond_springs
+- steps:
+  - thermal_bath
+  - active_force
+  - pair_potential
+  - bond_springs
+  - apical_junction
+  - mpm_strain
+  - mpm_scatter
+  - mpm_grid_update
+  - mpm_gather
+  substep_dt: 0.01
+  capture: true
+- aggregate_centroid
+seed:
+- op: seed_positions
+  model: from_points_ragged_batched
+  at: pt
+  cell_set: cell
+  points: experiments/exp10_oocyte_posterior/data/seed_oo1w.npz
+  um_per_unit: 0.005
+  centre_um:
+  - 0.0
+  - 0.0
+  - 0.0
+  centre:
+  - 0.0
+  - 0.0
+  - 0.0
+  value_block: bonded
+plotting:
+  renderer: vtk_points
+  subject: pt
+  render_3d: contour
+  point_volume: 0.008000000000000002
+  cell_colours: type
+  colors:
+    osk: '#E63946'
+    nos: '#F3722C'
+    pgc: '#F8961E'
+    gcl: '#F9C74F'
+    CycB: '#D62828'
+    Hsp83: '#FF6B6B'
+    Osk: '#4D96FF'
+    Vas: '#00BBF9'
+    Tud: '#43AA8B'
+    Aub: '#2A9D8F'
+    Bru: '#90BE6D'
+    Stau: '#577590'
+    Hrp48: '#9B5DE5'
+    Cup: '#4361EE'
+    Glo: '#06D6A0'
+    Smg: '#118AB2'
+  surface_opacity: 1.0
+  background: '#8d99a6'
+  foreground: white
+  box_frame: false
+  camera:
+    elev: 90
+    azim: -90
+  zoom: 1.0
+  duration_s: 10
+  slow_motion: 1
+  bond_lines: true
+  section_z:
+  - 7.6
+  - 12.799999999999999

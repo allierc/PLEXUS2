@@ -367,7 +367,8 @@ class JunctionContactSites(JunctionContactHashgrid):
     for a body of a chain (an mRNA's subunits, exp09), the first subunit of its run of k consecutive subunits; for any other body, itself. So all the point pairs between a
     protein and the k subunits of one site make ONE junction (one row, one contact area, one bound share in bond_binding, one count against a valence), named by the protein
     and the site's first subunit; the springs (bond_springs) act on every one of those point pairs, each through that row. Two subunits of one site are one cell to it.
-    particle <-> particle: as contact_finder[hashgrid] (same table, same parameters), with `site_block`.
+    particle <-> particle: as contact_finder[hashgrid] (same table, same parameters), with `site_block`; `periodic: true` makes every axis periodic with the world box as
+    its period, searched on the device when there is one (`search: cpu` keeps the kd-tree of the CPU implementation).
 
         A_{a\,S(b),fg}=s^{2}\,\big\lvert\{\,i\in a:\ \exists j\in S(b),\ \lvert\mathbf x_i-\mathbf x_j\rvert<r_b,\ (f_i,f_j)=fg\}\big\rvert
         A_{a S(b),fg}  the contact area of cell a and the site S(b) of cell b through face-pair class fg, world length squared
@@ -383,7 +384,30 @@ class JunctionContactSites(JunctionContactHashgrid):
     def __init__(self, params, device="cpu"):
         super().__init__(params, device)
         self.site_block = str(params["site_block"])
-        self.periodic = bool(params.get("periodic", False))     # every axis periodic, its period the world box's size (the CPU kd-tree's search)
+        self.periodic = bool(params.get("periodic", False))     # every axis periodic, its period the world box's size
+        # `search` (default "auto"): where a PERIODIC box is searched. "auto": on the device when there is a GPU with Warp and a hash-grid cell divides the box's three
+        # sides exactly (contact_periodic_warp_ops.periodic_forward: the grid's wrap is then the box's, every distance taken to the nearest image; the CPU search's
+        # pair list, junction rows and areas bit for bit on exp09 rna1_3dp, tests/test_exp09_periodic.py), else the CPU kd-tree; "cpu": always the kd-tree, which is
+        # what every periodic run did until 2026-11-19 (one search of rna1_3dp's 214,465 points on an RTX A6000 host: 0.71 s, against 0.008 s on the device)
+        self.search = str(params.get("search", "auto")).lower()
+        if self.search not in ("auto", "cpu"):
+            raise ValueError(f"contact_finder[sites]: `search` is auto or cpu, not {self.search!r}")
+        self._device_search = None                              # decided at the first periodic call: does a cell divide the box
+
+    def forward(self, H, mask=None):
+        if self.periodic and self.search == "auto" and HAVE_WARP and H.level(self.points).state.device.type == "cuda":
+            from plexus.operators import contact_periodic_warp_ops as CP      # here, not at the top: that module imports this one
+            if self._device_search is None:
+                try:
+                    w, dims = CP.grid_cells([float(v) for v in H.world_size], float(self.bond_reach + self.skin) * (1.0 + 1.0e-4) + 1.0e-5)
+                    self._device_search = True
+                    print(f"[contact_finder:sites] periodic box searched on the device: hash grid of {dims[0]} x {dims[1]} x {dims[2]} cells of {w:g}", flush=True)
+                except ValueError as e:
+                    self._device_search = False
+                    print(f"[contact_finder:sites] periodic box searched on the CPU (kd-tree): {e}", flush=True)
+            if self._device_search:
+                return CP.periodic_forward(self, H, mask)
+        return super().forward(H, mask)
 
     def _periods(self, H):
         if self.periodic:
