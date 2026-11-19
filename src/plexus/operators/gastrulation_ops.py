@@ -705,6 +705,71 @@ class CellPopulateMPM(CellPopulateMPMPoints):
         return max(self._mass[c] - counts[c], 0.0)
 
 
+@register_operator("cell_populate", model="mpm_interior", set="cell", kind="divide", family="population",
+                   title="add points inside each cell so it holds the mass it has",
+                   equation=r"""$$\mathbf x^{*}=\arg\max_{\mathbf q\in Q_c}\ \min_{i\in c}\lVert\mathbf q-\mathbf x_i\rVert,\qquad Q_c=\big\{\mathbf q=\mathbf x_j+h\,\mathbf u\ :\ \#\{i\in c:\lVert\mathbf q-\mathbf x_i\rVert<\rho h\}\ge k\big\}$$""")
+class CellPopulateMPMInterior(CellPopulateMPM):
+    r"""cell_populate[mpm] with `seat: fill`, a new point seated only where the cell's own material surrounds it: growth by packing the interior and swelling, never by accretion on the outside, so a cell of any shape keeps its density.
+    cell -> cell and its point set: as cell_populate[mpm].
+
+        \mathbf x^{*}=\arg\max_{\mathbf q\in Q_c}\ \min_{i\in c}\lVert\mathbf q-\mathbf x_i\rVert,\qquad Q_c=\big\{\mathbf q=\mathbf x_j+h\,\mathbf u\ :\ \#\{i\in c:\lVert\mathbf q-\mathbf x_i\rVert<\rho h\}\ge k\big\}
+        x^*            where a new point of cell c is seated
+        q              a candidate: a random live point x_j of the cell moved one spacing h in a random direction u (`tries` of them per new point)
+        Q_c            the candidates that lie inside the cell
+        \rho           `near_reach`, the radius of the neighbourhood test, in spacings (1.5)
+        k              `min_near`, the points of the cell a candidate needs within that radius (9: an interior site of a lattice has 14 on average, a site on a flat face 7, a site half a spacing outside it 4)
+        h              the point spacing, the cube root of the points' rest volume
+
+    The inside test counts the points the cell had before the call. When none of 4 x `tries` candidates is inside, the one with the most points of the cell around it is taken. cell_populate[mpm]'s `fill` calls a candidate inside when it is closer to the centroid than 90 % of the cell's points -- a ball,
+    which for a hemisphere or a wedge includes the empty side of a flat face -- and takes the candidate farthest from every point, so on a cell that is not round it seats new points OUTSIDE, on the flat faces; with `swell`
+    the cell then grows twice, by that accretion and by the swelling.
+
+    Reference: Plexus exp09 (this work, 2026-11-17): step 20 (it24), replicators cleaved in two and regrown lost 16 % of their density per generation (0.46 of it after four) and drew as fragments; cell_populate[mpm] (exp33)."""
+    PARAM_UNITS = dict(CellPopulateMPM.PARAM_UNITS, near_reach='fraction', min_near='count')
+    SYMBOLS = {'x^*': 'where a new point of cell c is seated', 'q': 'a candidate: a random live point of the cell moved one spacing in a random direction', 'Q_c': 'the candidates that lie inside the cell',
+               '\\rho': '`near_reach`, the radius of the neighbourhood test, in spacings', 'k': '`min_near`, the points of the cell a candidate needs within that radius', 'h': 'the point spacing'}
+    PARAM_ROLES = dict(CellPopulateMPM.PARAM_ROLES, near_reach="radius_of_the_inside_test_in_spacings", min_near="own_points_a_candidate_needs_within_that_radius")
+
+    def __init__(self, params, device="cpu"):
+        super().__init__(dict(params, seat="fill"), device)
+        self.near_reach = float(params.get("near_reach", 1.5))
+        self.min_near = int(params.get("min_near", 9))
+
+    def _fill(self, P, st, new, own, occ, par, p0, p1, h, dev):
+        """As cell_populate[mpm]'s `_fill`, the inside test replaced: a candidate is inside when `min_near` points of its cell lie within `near_reach` spacings of it."""
+        from scipy.spatial import cKDTree
+        X = P.state[:, p0:p1].detach().cpu().numpy().astype(np.float64)
+        new_np, own_np = new.cpu().numpy(), own.cpu().numpy()
+        out = st[:, p0:p1].detach().cpu().numpy().astype(np.float64)
+        for c in np.unique(own_np):
+            mem = np.flatnonzero(occ & (par == c))
+            Pc = X[mem]
+            slots = new_np[own_np == c]
+            kept = []
+            old = cKDTree(Pc)                                            # the inside test counts the points the cell HAD: points seated in this call must not make an outside site pass
+            for _ in range(len(slots)):                                  # one new point at a time: the next keeps its distance from it (the base seats a call's points against the old ones only)
+                Q = Pc if not kept else np.concatenate([Pc, np.asarray(kept)])
+                best, best_near = None, -1
+                for _round in range(4):                                  # up to 4 x `tries` candidates before giving up on an inside one
+                    base = Pc[self._rng.integers(0, len(Pc), self.tries)]
+                    u = self._rng.normal(size=(self.tries, 3))
+                    u /= np.linalg.norm(u, axis=1, keepdims=True)
+                    cand = base + h * u
+                    near = np.array([len(v) for v in old.query_ball_point(cand, self.near_reach * h)])
+                    ok = near >= self.min_near
+                    if ok.any():
+                        dist = cKDTree(Q).query(cand, k=1)[0]
+                        best = cand[np.where(ok, dist, -1.0).argmax()]
+                        break
+                    if near.max() > best_near:
+                        best, best_near = cand[near.argmax()], int(near.max())
+                kept.append(best)
+            out[slots] = np.asarray(kept)
+        st = st.clone()
+        st[:, p0:p1] = torch.as_tensor(out, dtype=st.dtype, device=dev)
+        return st
+
+
 @register_operator("apical_constriction", family="mechanics", set="particle", kind="lateral",
                    title="constrict the apical face",
                    equation=r"""$$\mathbf a_i=-k\,a_c\,(\mathbf I-\mathbf n_c\mathbf n_c^{\top})(\mathbf x_i-\bar{\mathbf x}^{ap}_c),\quad i\in\mathrm{apical}(c)=\{i\in c:\ \phi(\mathbf x_i)<\phi_s,\ c^{o}_i<c_s\}$$""")

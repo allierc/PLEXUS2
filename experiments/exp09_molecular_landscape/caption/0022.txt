@@ -1,0 +1,4 @@
+- video name: 0022
+- description: The simulation shows a collection of diverse molecular structures moving and interacting within a confined space. Over the course of 800 microseconds, the particles undergo constant Brownian-like motion and collisions. The spatial distribution of the bodies remains relatively uniform throughout the time sequence. There is no significant phase separation or large-scale aggregation observed during this period.
+- objects: The scene contains 350 bodies of varying shapes, including ring-like, elongated, and irregular blob-like structures. These objects are colored in shades of blue, cyan, green, and orange. Small spherical green particles are interspersed among the larger, more complex molecular models. The objects are distributed throughout the volume, with a 20 nm scale bar indicating their relative sizes.
+

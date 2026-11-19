@@ -1,0 +1,4 @@
+- video name: 0021
+- description: The simulation shows a collection of 380 bodies evolving over a period of 800 microseconds. The bodies move and change shape, with some forming ring-like structures and others remaining as irregular blobs. White lines appear and connect various bodies, suggesting the formation of a network or structural bonds over time. The overall distribution of the bodies remains relatively uniform throughout the duration of the video.
+- objects: The scene contains several types of bodies, including small green spheres, larger yellow and orange blobs, and blue irregular shapes. Some of the teal-colored bodies form distinct ring-like topologies, while others are elongated or amorphous. The bodies are distributed throughout a gray background, with a 20 nm scale bar provided for size reference. White lines connect many of the bodies, creating a complex, interconnected web across the entire field of view.
+

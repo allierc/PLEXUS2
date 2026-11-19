@@ -1,0 +1,4 @@
+- video name: 0024
+- description: The simulation shows a collection of 480 bodies evolving over a period of 200 microseconds. The particles are arranged in several distinct linear chains and clusters that maintain their general positions throughout the sequence. Small white lines appear and shift between the bodies, indicating dynamic connections or interactions. The overall structure remains relatively stable, with only minor fluctuations in the positions of the individual bodies.
+- objects: The scene contains numerous small, rounded bodies of varying colors including blue, green, yellow, red, and purple. Many of these bodies are organized into long, linear chains of red and orange particles. Larger, irregularly shaped blue and green bodies are scattered throughout the background and between the chains. Thin white lines connect some of the bodies, representing structural bonds or interaction paths.
+

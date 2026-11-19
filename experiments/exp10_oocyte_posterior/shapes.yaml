@@ -1,0 +1,211 @@
+Osk:
+  accession: P25158
+  residues: 606
+  folded_residues: 292
+  disordered_residues: 314
+  domains:
+  - residues: 94
+    ranges:
+    - 142-235
+    rg_nm: 1.3
+    globule_nm: 2.9
+  - residues: 198
+    ranges:
+    - 408-605
+    rg_nm: 1.55
+    globule_nm: 3.7
+Vas:
+  accession: P09052
+  residues: 661
+  folded_residues: 423
+  disordered_residues: 238
+  domains:
+  - residues: 423
+    ranges:
+    - 201-623
+    rg_nm: 2.12
+    globule_nm: 4.8
+Tud:
+  accession: P25823
+  residues: 2515
+  folded_residues: 1824
+  disordered_residues: 691
+  domains:
+  - residues: 192
+    ranges:
+    - 12-127
+    - 140-215
+    rg_nm: 1.92
+    globule_nm: 3.7
+  - residues: 308
+    ranges:
+    - 401-708
+    rg_nm: 2.58
+    globule_nm: 4.3
+  - residues: 47
+    ranges:
+    - 718-764
+    rg_nm: 1.18
+    globule_nm: 2.3
+  - residues: 166
+    ranges:
+    - 999-1164
+    rg_nm: 1.68
+    globule_nm: 3.5
+  - residues: 69
+    ranges:
+    - 1178-1246
+    rg_nm: 1.44
+    globule_nm: 2.6
+  - residues: 181
+    ranges:
+    - 1301-1481
+    rg_nm: 1.75
+    globule_nm: 3.6
+  - residues: 349
+    ranges:
+    - 1617-1965
+    rg_nm: 2.57
+    globule_nm: 4.5
+  - residues: 172
+    ranges:
+    - 1981-2152
+    rg_nm: 1.76
+    globule_nm: 3.5
+  - residues: 174
+    ranges:
+    - 2165-2338
+    rg_nm: 1.76
+    globule_nm: 3.5
+  - residues: 166
+    ranges:
+    - 2348-2513
+    rg_nm: 1.72
+    globule_nm: 3.5
+Aub:
+  accession: O76922
+  residues: 866
+  folded_residues: 775
+  disordered_residues: 91
+  domains:
+  - residues: 775
+    ranges:
+    - 92-866
+    rg_nm: 3.06
+    globule_nm: 5.8
+Bru:
+  accession: Q8IP90
+  residues: 810
+  folded_residues: 303
+  disordered_residues: 507
+  domains:
+  - residues: 57
+    ranges:
+    - 156-212
+    rg_nm: 2.46
+    globule_nm: 2.4
+  - residues: 150
+    ranges:
+    - 355-504
+    rg_nm: 2.02
+    globule_nm: 3.4
+  - residues: 96
+    ranges:
+    - 709-804
+    rg_nm: 1.21
+    globule_nm: 2.9
+Stau:
+  accession: P25159
+  residues: 1026
+  folded_residues: 326
+  disordered_residues: 700
+  domains:
+  - residues: 73
+    ranges:
+    - 310-382
+    rg_nm: 1.26
+    globule_nm: 2.6
+  - residues: 40
+    ranges:
+    - 520-559
+    rg_nm: 1.02
+    globule_nm: 2.2
+  - residues: 71
+    ranges:
+    - 577-647
+    rg_nm: 1.24
+    globule_nm: 2.6
+  - residues: 72
+    ranges:
+    - 710-781
+    rg_nm: 1.28
+    globule_nm: 2.6
+  - residues: 70
+    ranges:
+    - 951-1020
+    rg_nm: 1.19
+    globule_nm: 2.6
+Hrp48:
+  accession: P48809
+  residues: 421
+  folded_residues: 157
+  disordered_residues: 264
+  domains:
+  - residues: 79
+    ranges:
+    - 5-83
+    rg_nm: 1.17
+    globule_nm: 2.7
+  - residues: 78
+    ranges:
+    - 96-173
+    rg_nm: 1.17
+    globule_nm: 2.7
+Cup:
+  accession: Q9VMA3
+  residues: 1117
+  folded_residues: 92
+  disordered_residues: 1025
+  domains:
+  - residues: 92
+    ranges:
+    - 811-902
+    rg_nm: 2.08
+    globule_nm: 2.9
+Glo:
+  accession: Q9VGH5
+  residues: 586
+  folded_residues: 264
+  disordered_residues: 322
+  domains:
+  - residues: 185
+    ranges:
+    - 48-232
+    rg_nm: 1.74
+    globule_nm: 3.6
+  - residues: 79
+    ranges:
+    - 479-557
+    rg_nm: 1.16
+    globule_nm: 2.7
+Smg:
+  accession: Q23972
+  residues: 999
+  folded_residues: 307
+  disordered_residues: 692
+  domains:
+  - residues: 50
+    ranges:
+    - 71-120
+    rg_nm: 1.3
+    globule_nm: 2.3
+  - residues: 87
+    ranges:
+    - 196-282
+    rg_nm: 1.28
+    globule_nm: 2.8
+  - residues: 170
+    ranges:
+    - 595-764
+    rg_nm: 1.69
+    globule_nm: 3.5

@@ -112,6 +112,9 @@ from . import mpm_warp_pp_ops          # noqa: F401  exp27 speed audit: test 5a/
 from . import mpm_warp_pp_grid_ops          # noqa: F401  exp27 speed audit: test 5c: mpm_grid_update[warp_pp_balanced], body_csf_balanced as Warp kernels over the per-cell grid blocks
 from . import bm_shell_warp_ops          # noqa: F401  exp27 speed audit: test 5d: bm_cell_contact[warp], the membrane-to-cell contact as one Warp kernel on a hash grid of the nodes
 from . import adhesion_warp_ops          # noqa: F401  exp27 speed audit: test 5e: junction_contact[hashgrid] and active_force[sphere_crawl, hashgrid], the kd-tree searches as Warp hash-grid queries on the GPU
+from . import contact_warp_pp_ops       # noqa: F401  exp09 big scenes (2026-11-17): pair_potential[cell_contact_warp_pp], the overlap penalty on each cell's own block of lattice nodes, Warp
+from . import binding_delta_g_ops       # noqa: F401  exp09 (2026-11-19): bond_binding[delta_g], the unbinding rate of a junction from its pair's binding free energy
+from . import substep_warp_ops         # noqa: F401  exp09 speed (2026-11-19): the substep block of a crowd of small MPM bodies as Warp kernels one CUDA graph can replay (thermal_bath[langevin_warp], active_force[box_slab_warp], pair_potential[cell_contact_warp_pp_fixed], bond_springs[warp], apical_junction[warp], mpm_scatter[warp_pp_lean], mpm_grid_update[solved_in_gather], mpm_gather[warp_pp_solve]): 13 x faster on rna1_3d (1.186 -> 0.089 s per frame on one H200)
 from . import mpm_warp_polar_ops          # noqa: F401  exp27 speed audit: test 1, mpm_strain[polar] (Maxwell relaxation by the polar factor, one Warp kernel)
 from . import mpm_plasticity_ops         # noqa: F401  exp01 demo: mpm_plasticity[law: metal | sand], PhysGaussian's von Mises and Drucker-Prager return maps
 from . import mpm_rigid_ops              # noqa: F401  exp01 demo: mpm_rigid_body[implementation: bounce], the rigid projectile with a floor

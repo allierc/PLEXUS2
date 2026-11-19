@@ -842,7 +842,7 @@ def run(sim: Spec, out_path: str | None = None, device: str = "cpu",
                 g.create_dataset(key, shape=data.shape, dtype=data.dtype)[...] = data
 
         root = zarr.open_group(out_path, mode="w")
-        for name in H.levels:
+        for name in out["sets"]:                            # a `record: false` set is not in the record
             g = root.create_group(name)
             if out["sets"][name]["pos"] is not None:            # spatial: the pos trajectory
                 _put(g, "pos", out["sets"][name]["pos"])

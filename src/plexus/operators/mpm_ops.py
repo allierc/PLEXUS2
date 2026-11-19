@@ -4094,6 +4094,76 @@ class ActiveForceContactPush(ActiveForcePersistentWalk):
 
 
 @register_operator("active_force", "pulse_to_contraction", family="mechanics", set="particle",
+                   kind="exchange", model="track_push",
+                   equation=r"""$$\mathbf p_c\leftarrow\sigma_c\,\frac{\sum_{k\in\partial c\cap T}\mathbf t_k}{\lVert\sum_{k\in\partial c\cap T}\mathbf t_k\rVert},\qquad \mathbf t_k\parallel\mathbf x_{k+1}-\mathbf x_{k-1};\qquad \mathbf a_c\ \text{as contact\_push}$$""", title="walk along the filament a motor holds")
+class ActiveForceTrackPush(ActiveForceContactPush):
+    r"""the `track_push` model of active_force: contact_push for a motor on a filament. The polarity of a cell that touches cells of the type `track` is set, at every call, to the axis of the track where it touches it, with the cell's own sign; the push is contact_push's, so the motor runs along the filament instead of across it.
+    particle -[containment]-> cell: as contact_push; reads also the cell types and the centroids (the block `pos` of the cell set) for the track's axis. A cell that touches no track cell keeps the wandering polarity of persistent_walk.
+
+        \mathbf p_c\leftarrow\sigma_c\,\frac{\sum_{k\in\partial c\cap T}\mathbf t_k}{\lVert\sum_{k\in\partial c\cap T}\mathbf t_k\rVert},\qquad \mathbf t_k\parallel\mathbf x_{k+1}-\mathbf x_{k-1}
+        p_c            the unit polarity of cell c, used by contact_push's push
+        \sigma_c       the cell's own sign, +1 or -1, drawn once: which end of a track it walks toward
+        \partial c \cap T   the cells of type `track` that share a live junction row with c
+        t_k            the unit axis of the track at its cell k: toward the cell of the next slot, k+1, from that of the slot before, k-1, when those are track cells closer than `track_reach` (one side alone at a track's end)
+        x_k            the centroid of cell k
+        a_c            the acceleration of cell c, contact_push's
+
+    The track is a chain of cells seeded in slot order (seed_positions[from_points_ragged] keeps the order of its table): the slot order is what gives the axis one sense along the whole chain, which a nearest-neighbour direction would not.
+
+    Reference: Plexus exp09 (this work, 2026-11-17): a motor whose polarity wanders pushes in the plane of its contact with a filament whichever way that polarity points, and leaves the filament (exp09 it23: 7 of 25 motors still on a filament after 1,000 frames); Howard, J. (2001). Mechanics of Motor Proteins and the Cytoskeleton. Sinauer (a motor's direction is set by the filament's polarity)."""
+    PARAM_UNITS = dict(ActiveForceContactPush.PARAM_UNITS, track_reach='length')
+    SYMBOLS = {'p_c': "the unit polarity of cell c, used by contact_push's push", '\\sigma_c': "the cell's own sign, +1 or -1, drawn once: which end of a track it walks toward",
+               '\\partial c \\cap T': 'the cells of type `track` that share a live junction row with c',
+               't_k': "the unit axis of the track at its cell k: toward the cell of the next slot from that of the slot before, when those are track cells closer than `track_reach`",
+               'x_k': 'the centroid of cell k', 'a_c': "the acceleration of cell c, contact_push's"}
+    PARAM_ROLES = dict(ActiveForceContactPush.PARAM_ROLES, track="cell_type_of_the_filament_subunits", track_reach="largest_distance_between_two_consecutive_subunits_of_a_track")
+    REQUIRES_PARAMS = ["cell_set", "f", "contact_gate", "track"]
+    MECHANISM_TAGS = ["motility", "contact_traction", "momentum_conserving", "filament_track", "processive_motor"]
+    REFERENCE = ("Plexus exp09 (this work, 2026-11-17); Howard, J. (2001). Mechanics of Motor Proteins and the Cytoskeleton. Sinauer.")
+
+    def __init__(self, params, device="cpu"):
+        if not params.get("track"):
+            raise ValueError("active_force[track_push]: `track`, the cell type of the filament subunits, is required")
+        super().__init__(params, device)
+        self.track = str(params["track"])
+        self.track_reach = float(params.get("track_reach", 1.5))
+        self._sign = None
+
+    def _advance(self, H, cl, nc):
+        super()._advance(H, cl, nc)                                        # the wandering polarity of every cell, as persistent_walk
+        names = list(getattr(cl, "type_names", []) or [])
+        if self.track not in names:
+            return
+        if self._sign is None or self._sign.shape[0] != nc:                # one sign per cell, drawn once from the operator's own generator
+            self._sign = torch.where(torch.rand(nc, generator=self._gen, dtype=torch.float64) < 0.5, -1.0, 1.0).to(torch.float64)
+        is_t = (cl.node_type.detach().to("cpu").long()[:nc] == names.index(self.track)) & (cl.occ.detach().to("cpu")[:nc] > 0.5)
+        x = cl.get("pos").detach().to("cpu", torch.float64)[:nc]
+        t = torch.zeros(nc, 3, dtype=torch.float64)                        # the track's axis at each of its cells, in the sense of increasing slot
+        k = torch.arange(nc)
+        for d in (1, -1):
+            j = (k + d).clamp(0, nc - 1)
+            v = (x[j] - x) * float(d)
+            ok = is_t & is_t[j] & (j != k) & (v.norm(dim=1) < self.track_reach)
+            t[ok] += v[ok]
+        t = t / t.norm(dim=1, keepdim=True).clamp_min(1e-12)
+        J = H.level(str(self.contact_gate))
+        ca = J.get("ca")[:, 0].detach().to("cpu").round().long().clamp(0, nc - 1)
+        cb = J.get("cb")[:, 0].detach().to("cpu").round().long().clamp(0, nc - 1)
+        live = J.occ.detach().to("cpu") > 0.5
+        axis = torch.zeros(nc, 3, dtype=torch.float64)                     # per cell, the sum of the axes of the track cells it touches
+        m = live & is_t[ca] & ~is_t[cb]
+        axis.index_add_(0, cb[m], t[ca[m]])
+        m = live & is_t[cb] & ~is_t[ca]
+        axis.index_add_(0, ca[m], t[cb[m]])
+        n = axis.norm(dim=1)
+        on = n > 1e-9
+        if bool(on.any()):
+            p = self._p.clone()
+            p[on] = self._sign[on, None] * axis[on] / n[on, None]
+            self._p = p
+
+
+@register_operator("active_force", "pulse_to_contraction", family="mechanics", set="particle",
                    kind="exchange", model="substrate_walk",
                    equation=r"""$$\mathbf a_i=f_c\,s_c(t)\,\chi_i\,\mathbf p_c,\qquad \mathbf p_c=(\cos\theta_c,\sin\theta_c,0),\qquad d\theta_c=-k\sin(\theta_c-\theta^{\rm cue}_c)\,dt+\sqrt{2D_c}\,dW_c$$""", title="crawl cells on their substrate")
 class ActiveForceSubstrateWalk(ActiveForcePersistentWalk):

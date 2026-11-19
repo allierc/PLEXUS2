@@ -1,0 +1,102 @@
+{
+ "Osk": {
+  "accession": "P25158",
+  "gene": "osk",
+  "name": "Maternal effect protein oskar",
+  "residues": 606,
+  "confident_share": 0.47,
+  "model": "Osk_P25158.pdb",
+  "version": 6,
+  "url": "https://alphafold.ebi.ac.uk/files/AF-P25158-F1-model_v6.pdb"
+ },
+ "Vas": {
+  "accession": "P09052",
+  "gene": "vas",
+  "name": "ATP-dependent RNA helicase vasa",
+  "residues": 661,
+  "confident_share": 0.63,
+  "model": "Vas_P09052.pdb",
+  "version": 6,
+  "url": "https://alphafold.ebi.ac.uk/files/AF-P09052-F1-model_v6.pdb"
+ },
+ "Tud": {
+  "accession": "P25823",
+  "gene": "tud",
+  "name": "Protein tudor",
+  "residues": 2515,
+  "confident_share": 0.67,
+  "model": "Tud_P25823.pdb",
+  "version": 6,
+  "url": "https://alphafold.ebi.ac.uk/files/AF-P25823-F1-model_v6.pdb"
+ },
+ "Aub": {
+  "accession": "O76922",
+  "gene": "aub",
+  "name": "Protein aubergine",
+  "residues": 866,
+  "confident_share": 0.87,
+  "model": "Aub_O76922.pdb",
+  "version": 6,
+  "url": "https://alphafold.ebi.ac.uk/files/AF-O76922-F1-model_v6.pdb"
+ },
+ "Bru": {
+  "accession": "Q960Z4",
+  "gene": "bru1",
+  "name": "Bruno 1, isoform A",
+  "residues": 810,
+  "confident_share": 0.39,
+  "model": "Bru_Q960Z4.pdb",
+  "version": 6,
+  "url": "https://alphafold.ebi.ac.uk/files/AF-Q960Z4-F1-model_v6.pdb"
+ },
+ "Stau": {
+  "accession": "P25159",
+  "gene": "stau",
+  "name": "Maternal effect protein staufen",
+  "residues": 1026,
+  "confident_share": 0.33,
+  "model": "Stau_P25159.pdb",
+  "version": 6,
+  "url": "https://alphafold.ebi.ac.uk/files/AF-P25159-F1-model_v6.pdb"
+ },
+ "Hrp48": {
+  "accession": "P48809",
+  "gene": "Hrb27C",
+  "name": "Heterogeneous nuclear ribonucleoprotein 27C",
+  "residues": 421,
+  "confident_share": 0.37,
+  "model": "Hrp48_P48809.pdb",
+  "version": 6,
+  "url": "https://alphafold.ebi.ac.uk/files/AF-P48809-F1-model_v6.pdb"
+ },
+ "Cup": {
+  "accession": "Q9VMA3",
+  "gene": "cup",
+  "name": "Protein cup",
+  "residues": 1117,
+  "confident_share": 0.21,
+  "model": "Cup_Q9VMA3.pdb",
+  "version": 6,
+  "url": "https://alphafold.ebi.ac.uk/files/AF-Q9VMA3-F1-model_v6.pdb"
+ },
+ "Glo": {
+  "accession": "Q9VGH5",
+  "gene": "glo",
+  "name": "AT27789p",
+  "residues": 586,
+  "confident_share": 0.43,
+  "model": "Glo_Q9VGH5.pdb",
+  "version": 6,
+  "url": "https://alphafold.ebi.ac.uk/files/AF-Q9VGH5-F1-model_v6.pdb"
+ },
+ "Smg": {
+  "accession": "Q23972",
+  "gene": "smg",
+  "name": "Protein Smaug",
+  "residues": 999,
+  "confident_share": 0.33,
+  "model": "Smg_Q23972.pdb",
+  "version": 6,
+  "url": "https://alphafold.ebi.ac.uk/files/AF-Q23972-F1-model_v6.pdb"
+ }
+}

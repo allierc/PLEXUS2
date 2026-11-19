@@ -20,6 +20,7 @@ experiments/*/story/
 *.npz
 *.npy
 !experiments/exp09_molecular_landscape/data/seed_it*.npz
+!experiments/exp09_molecular_landscape/data/seed_rna*.npz
 
 # drafts the GUI writes from a prompt
 config/studio/

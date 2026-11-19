@@ -250,7 +250,7 @@ class JunctionContactHashgrid(JunctionContact):
     def forward(self, H, mask=None):
         P, C, J = H.level(self.points), H.level(self.cells), H.level(self.at)
         dev, dt_ = P.state.device, P.state.dtype
-        if self.period > 0.0 or not HAVE_WARP or dev.type != "cuda":
+        if (self._periods(H) > 0.0).any() or not HAVE_WARP or dev.type != "cuda":     # a periodic axis: the kd-tree of the CPU implementation
             return super().forward(H, mask)
         nC = int(C.state.shape[0])
         live = torch.nonzero(P.occ > 0.5).reshape(-1)
@@ -259,8 +259,9 @@ class JunctionContactHashgrid(JunctionContact):
             return super().forward(H, mask)
         Xs = P.get("pos").detach()[live]
         X = Xs.double()
-        cid = H.lift_index(self.points, self.cells)[live]
+        cid = self._cell_index(H)[live]
         H._adh_period = 0.0
+        H._adh_box = np.zeros(3)
         part = _partners(self, Xs, X, cid, self.bond_reach + self.skin, self.k_nn)
         i = torch.nonzero(part >= 0).reshape(-1)
         j = part[i]
@@ -307,7 +308,9 @@ class JunctionContactHashgrid(JunctionContact):
         sch = J.state_schema
         cA, cB, cF, cR, cAr, cL = (sch[k][0] for k in ("ca", "cb", "fg", "rho", "area", "load"))
         st = J.state.detach().clone()
-        rowkey = ((torch.round(st[:, cA]) * nC + torch.round(st[:, cB])) * 6 + torch.round(st[:, cF])).long()
+        # the key in int64: in the state's float32 a * nC + b is exact only below 2^24, so above about 1,700 cells no row matched its own contact again and every
+        # contact took a new row each frame (exp09 a100k, 100,000 cells, 2026-11-17: the table full, no bond kept)
+        rowkey = (torch.round(st[:, cA]).long() * nC + torch.round(st[:, cB]).long()) * 6 + torch.round(st[:, cF]).long()
         rowkey = torch.where(occJ, rowkey, torch.full_like(rowkey, -1))
         if not isinstance(self._idle, torch.Tensor) or tuple(self._idle.shape) != (J.n,) or self._idle.device != st.device:
             self._idle = torch.zeros(J.n, dtype=torch.long, device=st.device)
@@ -355,6 +358,45 @@ class JunctionContactHashgrid(JunctionContact):
         H.junction_rows = int(occJ.sum())
         return {}
 
+
+
+@register_operator("contact_finder", implementation="sites", family="topology", set="junction", kind="rewire",
+                   title="detect contacts, each point counted in its site: a run of consecutive bodies of a chain", equation=r"""$$A_{a\,S(b),fg}=s^{2}\,\big\lvert\{\,i\in a:\ \exists j\in S(b),\ \lvert\mathbf x_i-\mathbf x_j\rvert<r_b,\ (f_i,f_j)=fg\}\big\rvert$$""")
+class JunctionContactSites(JunctionContactHashgrid):
+    r"""contact_finder[hashgrid] with every point counted in its body's SITE instead of its body: the cell block `site_block` holds, per cell, the first cell of its site --
+    for a body of a chain (an mRNA's subunits, exp09), the first subunit of its run of k consecutive subunits; for any other body, itself. So all the point pairs between a
+    protein and the k subunits of one site make ONE junction (one row, one contact area, one bound share in bond_binding, one count against a valence), named by the protein
+    and the site's first subunit; the springs (bond_springs) act on every one of those point pairs, each through that row. Two subunits of one site are one cell to it.
+    particle <-> particle: as contact_finder[hashgrid] (same table, same parameters), with `site_block`.
+
+        A_{a\,S(b),fg}=s^{2}\,\big\lvert\{\,i\in a:\ \exists j\in S(b),\ \lvert\mathbf x_i-\mathbf x_j\rvert<r_b,\ (f_i,f_j)=fg\}\big\rvert
+        A_{a S(b),fg}  the contact area of cell a and the site S(b) of cell b through face-pair class fg, world length squared
+        S(b)           the cells of b's site: those whose `site_block` value is b's
+        s              `spacing`, the point spacing
+        r_b            `bond_range`, the contact distance
+
+    Reference: as `contact_finder`; Plexus exp09 (this work, 2026-11-19: mRNA as chains of subunits, a binding site as a run of them)."""
+    PARAM_UNITS = dict(JunctionContactHashgrid.PARAM_UNITS)
+    SYMBOLS = dict(JunctionContactHashgrid.SYMBOLS, **{'A_{a S(b),fg}': 'the contact area of cell a and the site of cell b', 'S(b)': "the cells of b's site"})
+    REFERENCE = "Plexus exp09 (this work, 2026-11-19)."
+
+    def __init__(self, params, device="cpu"):
+        super().__init__(params, device)
+        self.site_block = str(params["site_block"])
+        self.periodic = bool(params.get("periodic", False))     # every axis periodic, its period the world box's size (the CPU kd-tree's search)
+
+    def _periods(self, H):
+        if self.periodic:
+            return np.asarray([float(v) for v in H.world_size], np.float64)
+        return super()._periods(H)
+
+    def _cell_index(self, H):
+        idx = H.lift_index(self.points, self.cells)
+        C = H.level(self.cells)
+        if self.site_block not in C.state_schema:
+            raise ValueError(f"contact_finder[sites]: the cell set `{self.cells}` has no block `{self.site_block}` (each cell's site: the first cell of its run)")
+        rep = torch.round(C.state[:, C.state_schema[self.site_block][0]]).long().clamp(0, C.state.shape[0] - 1)
+        return rep[idx.long()].to(idx.dtype)
 
 @register_operator("contact_finder", implementation="differentiable", family="topology", set="junction", kind="rewire",
                    title="detect cell contacts and keep the junction density on the tape", equation=r"""$$A_{ab,fg}=s^{2}\,\big\lvert\{\,i\in a:\ \exists j\in b,\ \lvert\mathbf x_i-\mathbf x_j\rvert<r_b,\ (f_i,f_j)=fg\}\big\rvert$$""")

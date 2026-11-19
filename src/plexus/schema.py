@@ -153,6 +153,12 @@ class Spec:
     warmup: int = None
     # wall-clock minutes between partial saves of `trajectory.npz` during a run (0 = only at the end): a long run can be scored while it goes
     save_every_min: float = 0.0
+    # every that many frames the rows recorded since the last chunk are written to `chunks/rows_<first>_<last>.npz` and NO whole trajectory is
+    # written at the end (0 = off): a run too large for one file at its end is read, and drawn, while it goes
+    save_chunk_frames: int = 0
+    # with save_chunk_frames: at every recorded row the live members of one set whose parent's centre lies inside a box are kept as well, {set, box: [[x0, y0], [x1, y1]],
+    # margin}: the window of a world too large to record whole (window__pos, window__parent, window__offsets in each chunk)
+    save_chunk_window: dict = None
     # per-segment frame duration `[{frames: N, dt: X}, ...]`, frames summing to n_frames (a speed ramp); None = every frame lasts `dt`
     dt_schedule: list = None
 
@@ -695,6 +701,8 @@ def load(path: str) -> Spec:
         save_data=gv("save_data", None),
         warmup=(None if gv("warmup", None) is None else int(gv("warmup", None))),
         save_every_min=float(gv("save_every_min", 0.0)),
+        save_chunk_frames=int(gv("save_chunk_frames", 0)),
+        save_chunk_window=gv("save_chunk_window", None),
         dt_schedule=_parse_dt_schedule(gv("dt_schedule", None), int(gv("n_frames", 200))),
     )
     if _spec.dt_schedule:

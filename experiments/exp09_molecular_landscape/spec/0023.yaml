@@ -1,0 +1,387 @@
+general:
+  name: exp09_land_a100k
+  headline: 'exp09 a100k: a crowded molecular landscape of 100,000 MPM bodies (19 % of a slab 3,115 x 1,752 x 52 nm)'
+  title: 'TWIN A of step 21 at 100,000 molecules: it33''s scene (the valence rule -- dimers 2 bonds, three-lobed complexes 3, tetramers 4, each kind binding its own; the walking motors; the passive crowd) with every count x 263 and the slab widened 16.2 x in x and y to 3.1 x 1.75 um, its depth (52 nm) and its share of the volume (19 %) kept, every body as in step 21; 1,000 frames (200 us) on one H200. At left the whole slab, every body a dot at its centre; at right a 192 x 108 nm window from its centre, the size of step 21''s whole slab, every body drawn by its points. Do the chains, trees and networks of step 21 form alike when the crowd is 263 times larger'
+  seed: 1
+  n_frames: 4000
+  dt: 1.0
+  record_cap: 1001
+  save_chunk_window:
+    set: pt
+    box:
+    - - 137.13256428553206
+      - 77.39956741061177
+    - - 175.53256428553203
+      - 98.99956741061176
+    margin: 1.5
+    edges:
+      set: junction
+      a: ca
+      b: cb
+      keep:
+      - rho
+  save_chunk_frames: 250
+  boundary: free
+  dim: 3
+  world:
+  - 312.66512857106403
+  - 176.39913482122353
+  - 6.4
+  units:
+    length_um: 0.01
+    time_s: 2.0e-07
+fields:
+  mpm_grid:
+    frame: mpm_grid
+    n_grid: 15
+    per_parent: cell
+    cell_box: 3.0
+sets:
+  cell:
+    n: 100000
+    type_layout: ordered
+    types:
+      trimer:
+        count: 10526
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      enzyme:
+        count: 15790
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      small:
+        count: 31579
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      clover:
+        count: 10526
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      dimer:
+        count: 15790
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      pear:
+        count: 10526
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      ring:
+        count: 5263
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: rate
+        record: false
+      adh:
+        width: 6
+        record: false
+      valence:
+        width: 1
+        record: false
+  pt:
+    entity: mpm_particle
+    parent: cell
+    per_parent: 133
+    density: 1.0
+    radius: 0.5
+    record: false
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: rate
+        record: false
+      pid:
+        width: 1
+      cellc:
+        width: 1
+        record: false
+      face:
+        width: 1
+        record: false
+  junction:
+    n: 0
+    buffer: 524288
+    record: false
+    state:
+      ca:
+        width: 1
+        integration: none
+      cb:
+        width: 1
+        integration: none
+      fg:
+        width: 1
+        integration: none
+        record: false
+      rho:
+        width: 1
+        integration: first_order
+      area:
+        width: 1
+        integration: none
+      load:
+        width: 1
+        integration: none
+operators:
+- op: thermal_bath
+  implementation: langevin
+  at: pt
+  friction: 0.0125
+  kT: 2.5e-05
+  substep_dt: 0.01
+  seed: 1
+- op: active_force
+  model: box_slab
+  at: pt
+  wall_stiffness: 400.0
+  lo:
+  - 0.6
+  - 0.6
+  - 0.6
+  hi:
+  - 312.06512857106406
+  - 175.79913482122353
+  - 5.8
+- op: active_force
+  model: persistent_walk
+  at: pt
+  cell_set: cell
+  f: 0.0
+  Dr: 4.0e-05
+  seed: 1
+  type_f:
+    pear: 0.0008
+- op: pair_potential
+  model: cell_contact
+  at: pt
+  cells: cell
+  repulsion_strength: 600.0
+  contact_slack: 0.2
+  contact_surface_tension:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  contact_edge_width: 0.2
+- op: contact_finder
+  at: junction
+  points: pt
+  cells: cell
+  spacing: 0.2
+  bond_range: 0.45
+  implementation: hashgrid
+- op: bond_binding
+  at: junction
+  cells: cell
+  binding_rate: 1.0
+  unbinding_rate: 0.005
+  bond_strength: 0.001
+  bell: area
+  min_area: 0.12
+  type_matrix:
+  - - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  implementation: valence
+  valence_block: valence
+- op: bond_springs
+  at: pt
+  junctions: junction
+  bond_stiffness: 0.001
+  bond_damping: 0.0
+  spacing: 0.2
+  bond_rest_length: 0.22
+  bond_range: 0.45
+- op: mpm_strain
+  at: pt
+  implementation: warp
+- op: mpm_scatter
+  at: mpm_grid
+  from: pt
+  drag: 0.0
+  implementation: warp_pp
+- op: mpm_grid_update
+  at: mpm_grid
+  implementation: warp_pp_balanced
+- op: mpm_gather
+  at: pt
+  from: mpm_grid
+  implementation: warp_pp
+- op: aggregate_centroid
+  at: cell
+  child: pt
+schedule:
+- contact_finder
+- bond_binding
+- steps:
+  - thermal_bath
+  - active_force
+  - active_force
+  - pair_potential
+  - bond_springs
+  - mpm_strain
+  - mpm_scatter
+  - mpm_grid_update
+  - mpm_gather
+  substep_dt: 0.01
+  capture: false
+- aggregate_centroid
+seed:
+- op: seed_positions
+  model: from_points_ragged
+  at: pt
+  cell_set: cell
+  points: experiments/exp09_molecular_landscape/data/seed_a100k.npz
+  um_per_unit: 0.01
+  centre_um:
+  - 0.0
+  - 0.0
+  - 0.0
+  centre:
+  - 0.0
+  - 0.0
+  - 0.0
+plotting:
+  renderer: vtk_points
+  subject: pt
+  render_3d: contour
+  point_volume: 0.008
+  cell_colours: type
+  colors:
+    trimer: '#E9C46A'
+    enzyme: '#2A9D8F'
+    small: '#8AC926'
+    clover: '#4D96FF'
+    dimer: '#00BBF9'
+    pear: '#F4A261'
+    ring: '#43AA8B'
+  surface_opacity: 1.0
+  background: '#8d99a6'
+  foreground: white
+  box_frame: false
+  camera:
+    elev: 90
+    azim: -90
+  zoom: 1.0
+  duration_s: 10
+  slow_motion: 1
+  bond_lines: true

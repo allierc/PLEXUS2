@@ -732,6 +732,14 @@ class JunctionContact(Structural):
         self.period = float(params.get("period", 0.0))
         self._idle = None
 
+    def _cell_index(self, H):
+        """The cell each point of `points` is counted in: its own (the containment map). contact_finder[sites] counts it in its site's first body instead."""
+        return H.lift_index(self.points, self.cells)
+
+    def _periods(self, H):
+        """The period of each axis, world length (0 = not periodic): `period` along x alone. contact_finder[sites] with `periodic` takes the world box on every axis."""
+        return np.array([float(self.period), 0.0, 0.0])
+
     def forward(self, H, mask=None):
         from scipy.spatial import cKDTree
         P, C, J = H.level(self.points), H.level(self.cells), H.level(self.at)
@@ -739,22 +747,27 @@ class JunctionContact(Structural):
         nC = int(C.state.shape[0])
         live = torch.nonzero(P.occ > 0.5).reshape(-1)
         X = P.get("pos")[live].detach().cpu().numpy().astype(np.float64)
-        cid = H.lift_index(self.points, self.cells)[live].cpu().numpy()
+        cid = self._cell_index(H)[live].cpu().numpy()
         # ONE PARTNER PER POINT: its nearest point in ANOTHER cell, within bond_range + skin. All pairs within the reach
         # would include lattice diagonals (1.41 and 1.73 spacings apart at rest), loaded beyond r_eq while the
         # cells sit still; the nearest partner of a surface point of two touching cubes is one spacing away.
-        L = self.period
-        if L > 0.0:
-            Xw = X.copy(); Xw[:, 0] = np.mod(X[:, 0], L)
-            lo = X[:, 1:].min(0)
-            if bool((lo < -0.5).any()):                  # a point far outside the world: say so, once per call
-                print(f"[contact_finder] frame {getattr(H, 'frame', None)}: lowest y, z of any point {lo[0]:.2f}, {lo[1]:.2f}",
-                      flush=True)
-            Xw[:, 1:] -= lo                              # the periodic kd-tree wants every coordinate in [0, boxsize)
-            tree = cKDTree(Xw, boxsize=[L, 1.0e5, 1.0e5]); Xq = Xw
+        Lv = self._periods(H)                            # the period of each axis, 0 = not periodic (`period`: x alone)
+        L = float(Lv[0])
+        if (Lv > 0.0).any():
+            Xw = X.copy()
+            per = Lv > 0.0
+            Xw[:, per] = np.mod(X[:, per], Lv[per])
+            if (~per).any():
+                lo = X[:, ~per].min(0)
+                if bool((lo < -0.5).any()):              # a point far outside the world: say so, once per call
+                    print(f"[contact_finder] frame {getattr(H, 'frame', None)}: lowest non-periodic coordinates of any point {np.round(lo, 2).tolist()}",
+                          flush=True)
+                Xw[:, ~per] -= lo                        # the periodic kd-tree wants every coordinate in [0, boxsize)
+            tree = cKDTree(Xw, boxsize=np.where(per, Lv, 1.0e5)); Xq = Xw
         else:
             tree = cKDTree(X); Xq = X
         H._adh_period = L
+        H._adh_box = Lv                                  # every axis's period, for bond_springs' nearest image
         dd, nn = tree.query(Xq, k=self.k_nn, distance_upper_bound=self.bond_reach + self.skin, workers=self.workers)
         ok = np.isfinite(dd)
         nn_c = np.where(ok, nn, 0)
@@ -775,8 +788,8 @@ class JunctionContact(Structural):
                else np.tile([0.0, 0.0, 1.0], (nC, 1)))
         pol = pol / np.maximum(np.linalg.norm(pol, axis=1, keepdims=True), 1e-12)
         dvec = X[j] - X[i]
-        if L > 0.0:
-            dvec[:, 0] -= L * np.round(dvec[:, 0] / L)
+        for ax_ in np.flatnonzero(Lv > 0.0):
+            dvec[:, ax_] -= Lv[ax_] * np.round(dvec[:, ax_] / Lv[ax_])
         dvec = dvec / np.maximum(np.linalg.norm(dvec, axis=1, keepdims=True), 1e-12)
         dvec = np.where((cid[i] == a)[:, None], dvec, -dvec)                     # from cell a toward cell b
         k0 = a * nC + b
@@ -791,8 +804,8 @@ class JunctionContact(Structural):
         fg = _FG[fa, fb][inv0]
         key = k0 * 6 + fg
         dij = X[i] - X[j]
-        if L > 0.0:
-            dij[:, 0] -= L * np.round(dij[:, 0] / L)
+        for ax_ in np.flatnonzero(Lv > 0.0):
+            dij[:, ax_] -= Lv[ax_] * np.round(dij[:, ax_] / Lv[ax_])
         r = np.linalg.norm(dij, axis=1)
         touch = r < self.bond_reach
         # contact per key: the distinct points of the LOWER cell within bond_range, x spacing^2
@@ -808,8 +821,9 @@ class JunctionContact(Structural):
         occJ = (J.occ > 0.5).cpu().numpy()
         sch = J.state_schema
         st = J.state.detach().cpu().numpy().copy()
-        rowkey = ((np.rint(st[:, sch["ca"][0]]) * nC + np.rint(st[:, sch["cb"][0]])) * 6
-                  + np.rint(st[:, sch["fg"][0]])).astype(np.int64)
+        # the key in int64 (see adhesion_warp_ops): float32 a * nC + b is exact only below 2^24
+        rowkey = ((np.rint(st[:, sch["ca"][0]]).astype(np.int64) * nC + np.rint(st[:, sch["cb"][0]]).astype(np.int64)) * 6
+                  + np.rint(st[:, sch["fg"][0]]).astype(np.int64))
         rowkey[~occJ] = -1
         if self._idle is None or len(self._idle) != J.n:
             self._idle = np.zeros(J.n, np.int64)
@@ -1004,6 +1018,96 @@ class JunctionKineticsImmediate(JunctionKinetics):
         return {}
 
 
+@register_operator("bond_binding", implementation="valence", family="mechanics", set="junction", kind="lateral",
+                   title="bind adhesion, each cell up to its own number of bonds",
+                   equation=r"""$$\dot\rho_J=k_{on}\,(\rho^*_{fg}-\rho_J)\,[A_J>A_{min}]\,g_J-k_{off}\,e^{\sigma/\sigma_\beta}\,\rho_J,\qquad g_J=1\ \text{if}\ \rho_J>\rho_b\ \text{or}\ J\ \text{is admitted},\qquad \#\{J\ni c:\ g_J=1\}\le v_c$$""")
+class JunctionKineticsValence(JunctionKinetics):
+    r"""bond_binding with a VALENCE: a cell holds at most its own number of bonds. A junction that holds a bond keeps it; among the touching junctions that hold none, the largest contacts are admitted first, each while both of its cells have a bond to spare; a junction that is not admitted does not bind.
+    junction -> junction: as bond_binding; reads also the width-1 cell block `valence_block` (the number of bonds a cell may hold; 0 = none).
+
+        \dot\rho_J=k_{on}\,(\rho^*_{fg}-\rho_J)\,[A_J>A_{min}]\,g_J-k_{off}\,e^{\sigma/\sigma_\beta}\,\rho_J,\qquad \#\{J\ni c:\ g_J=1\}\le v_c
+        \rho_J         the bound density of junction J
+        g_J            1 for a junction that holds a bond (rho_J above `bound_at`) or is admitted this frame, else 0
+        v_c            the valence of cell c: block `valence_block`, rounded
+        \rho_b         `bound_at`, the bound density above which a junction counts as one bond of each of its two cells (0.5)
+        k_{on}, k_{off}, \rho^*_{fg}, A_J, A_{min}, \sigma, \sigma_\beta  as bond_binding (`type_matrix` still says which pairs of types may bind at all)
+
+    Admission, every frame: the junctions that hold a bond are counted per cell; the live touching junctions that hold none and whose pair of types may bind are taken by decreasing contact area, and one is admitted when both its
+    cells still have fewer bonds (held or admitted before it this frame) than their valence.
+
+    Reference: Plexus exp09 (this work, 2026-11-17; Cedric: "adhesion only between given pairs of species and a number of adhesions per protein, protein dependent: 2, 3, 4"); Li, P. et al. (2012). Phase transitions in the
+    assembly of multivalent signalling proteins. Nature 483:336-340 (the number of binding sites per molecule sets what assembles: pairs, chains, networks)."""
+    EXPLAIN = (
+        r"bond_binding with a limit on how many bonds a cell holds. A junction binds as in bond_binding, "
+        r"$\dot\rho=k_{on}(\rho^*-\rho)[A>A_{min}]\,g-k_{off}e^{\sigma/\sigma_\beta}\rho$, but only when $g=1$: when it already holds a bond "
+        r"($\rho$ above `bound_at`) or is admitted this frame. Junctions are admitted largest contact first, each while both of its cells "
+        r"hold fewer bonds than their valence $v_c$ (the cell block `valence_block`). A cell of valence 2 ends in chains and rings, 3 in branched trees, 4 in networks."
+    )
+    PARAM_UNITS = dict(JunctionKinetics.PARAM_UNITS, bound_at='fraction') if hasattr(JunctionKinetics, "PARAM_UNITS") else {'bound_at': 'fraction'}
+    SYMBOLS = {'\\rho_J': 'the bound density of junction J', 'g_J': '1 for a junction that holds a bond or is admitted this frame, else 0', 'v_c': 'the valence of cell c: block `valence_block`, rounded',
+               '\\rho_b': '`bound_at`, the bound density above which a junction counts as one bond of each of its two cells',
+               'k_{on}, k_{off}, \\rho^*_{fg}, A_J, A_{min}, \\sigma, \\sigma_\\beta': 'as bond_binding'}
+    PARAM_ROLES = dict(JunctionKinetics.PARAM_ROLES, valence_block="cell_block_with_the_number_of_bonds_a_cell_may_hold", bound_at="bound_density_that_counts_as_a_bond") if hasattr(JunctionKinetics, "PARAM_ROLES") else {}
+    REFERENCE = "Plexus exp09 (this work, 2026-11-17); Li, P. et al. (2012). Nature 483:336-340."
+
+    def __init__(self, params, device="cpu"):
+        if not params.get("valence_block"):
+            raise ValueError("bond_binding[valence]: `valence_block`, the width-1 cell block with each cell's number of bonds, is required")
+        super().__init__({k: v for k, v in params.items() if k not in ("valence_block", "bound_at")}, device)
+        self.valence_block = str(params["valence_block"])
+        self.bound_at = float(params.get("bound_at", 0.5))
+
+    def _rho_next(self, H):
+        """bond_binding's exact one-frame step with the binding term of every junction multiplied by its gate g_J (see the class)."""
+        J, C = H.level(self.at), H.level(self.cells)
+        nC = int(C.state.shape[0])
+        rho = J.get("rho")[:, 0]
+        ca = J.get("ca")[:, 0].round().long().clamp(0, nC - 1)
+        cb = J.get("cb")[:, 0].round().long().clamp(0, nC - 1)
+        fg = J.get("fg")[:, 0].round().long().clamp(0, 5)
+        adh = C.get("adh")
+        rmax = torch.minimum(adh[ca, fg], adh[cb, fg])
+        if self.type_matrix is not None:
+            tm = torch.as_tensor(self.type_matrix, device=rho.device, dtype=rho.dtype)
+            nt = C.node_type.long().clamp(0, tm.shape[0] - 1)
+            rmax = rmax * tm[nt[ca], nt[cb]]
+        live = J.occ > 0.5
+        area = J.get("area")[:, 0]
+        touch = area > self.min_area
+        # ---- the gate, on the CPU: a few hundred junction rows, a greedy pass that a vectorised form would not order the same way
+        val = C.get(self.valence_block)[:, 0].detach().round().long().cpu().numpy()
+        ca_n, cb_n = ca.detach().cpu().numpy(), cb.detach().cpu().numpy()
+        held = (live & (rho > self.bound_at)).detach().cpu().numpy()
+        n = np.bincount(ca_n[held], minlength=nC) + np.bincount(cb_n[held], minlength=nC)          # bonds held per cell
+        cand = np.flatnonzero((live & ~(rho > self.bound_at) & touch & (rmax > 0)).detach().cpu().numpy())
+        ar = area.detach().cpu().numpy()
+        gate = held.copy()
+        for j in cand[np.argsort(-ar[cand], kind="stable")]:                                       # largest contact first, the row order breaking ties
+            a_, b_ = ca_n[j], cb_n[j]
+            if a_ != b_ and n[a_] < val[a_] and n[b_] < val[b_]:
+                gate[j] = True
+                n[a_] += 1
+                n[b_] += 1
+        g = torch.as_tensor(gate, device=rho.device).to(rho.dtype)
+        sig = J.get("load")[:, 0].clamp(min=0.0)
+        if self.bell == "bond":
+            sig = sig / rho.clamp(min=self.rho_floor)
+
+        def _pj(scalar, block):
+            if not block:
+                return scalar
+            v = C.state[:, C.state_schema[block][0]].to(rho.dtype)
+            return 0.5 * (v[ca] + v[cb])
+        k_on, k_off, sigma_beta = _pj(self.k_on, self.k_on_block), _pj(self.k_off, self.k_off_block), _pj(self.sigma_beta, self.sigma_beta_block)
+        a = k_on * touch.to(rho.dtype) * g
+        b = k_off * torch.exp((sig / sigma_beta).clamp(max=30.0))
+        dt = float(getattr(H, "dt", 1.0))
+        rate = (a + b).clamp(min=1e-12)
+        r_eq = a * rmax / rate
+        rho_next = r_eq + (rho - r_eq) * torch.exp(-rate * dt)
+        return J, rho, rho_next, live
+
+
 @register_operator("bond_springs", family="interaction", set="particle", kind="exchange",
                    title="pull adhered cells together",
                    equation=r"""$$\mathbf F_{ij}=\kappa\,\rho_J\,(r-r_{eq})^+\,\hat{\mathbf r}_{ij}\,[r<r_c]+\zeta\,\rho_J\,(1-r/r_c)^2\,(\mathbf v_j-\mathbf v_i)\,[r<r_c],\qquad \mathbf F_{ji}=-\mathbf F_{ij}$$""")
@@ -1079,9 +1183,12 @@ class CellAdhesion(Exchange):
             return {self.at: acc}
         rho = J.get("rho")[row, 0].clamp(min=0.0) * (J.occ[row] > 0.5).to(X.dtype)
         d = X[j] - X[i]
-        Lp = float(getattr(H, "_adh_period", 0.0))
-        if Lp > 0.0:
-            d = torch.cat([(d[:, :1] - Lp * torch.round(d[:, :1] / Lp)), d[:, 1:]], dim=1)
+        Lb = getattr(H, "_adh_box", None)                # every axis's period as the contact finder searched them (its `period` along x alone otherwise)
+        if Lb is None:
+            Lb = [float(getattr(H, "_adh_period", 0.0)), 0.0, 0.0]
+        for ax_, Lp in enumerate(Lb):
+            if float(Lp) > 0.0:
+                d = torch.cat([d[:, :ax_], d[:, ax_:ax_ + 1] - float(Lp) * torch.round(d[:, ax_:ax_ + 1] / float(Lp)), d[:, ax_ + 1:]], dim=1)
         r = d.norm(dim=1).clamp_min(1e-9)
         par_ = P.parent.long()
 
@@ -2650,34 +2757,43 @@ class CellDivideCleaveTangentSkin(CellDivideCleaveTangentRelaxed):
 
 
 @register_operator("pair_potential", model="cell_contact", family="interaction", set="particle", kind="exchange",
-                   title="keep cells apart and set the tension of each contact, on the lattice nodes each cell touches", equation=r"""$$E=E_{\rm overlap}-w\sum_{A<B}\gamma_{\tau_A\tau_B}\int\nabla\phi_A\cdot\nabla\phi_B\,dV\;\approx\;E_{\rm overlap}+\sum_{A<B}\gamma_{\tau_A\tau_B}\,S_{AB},\qquad \frac{\partial E}{\partial\phi_A(n)}=w\,\Delta x\sum_{B\neq A}\gamma_{\tau_A\tau_B}\,\nabla^2\phi_B(n)$$""")
+                   title="keep cells apart and set the tension of each contact, on the lattice nodes each cell touches", equation=r"""$$E=E_{\rm overlap}-w\sum_{A<B}\gamma_{\tau_A\tau_B}\int\nabla\phi_A\cdot\nabla\phi_B\,dV\;\approx\;E_{\rm overlap}+\sum_{A<B}\gamma_{\tau_A\tau_B}\,S_{AB},\qquad E_{\rm overlap}=\Delta x^3\sum_n\tfrac{k}{2}\,(P_n-s_0)_+^2,\quad P_n=\sum_{A<B}\phi_A(n)\,\phi_B(n),\qquad \mathbf F_i=-\frac{\partial E}{\partial\mathbf x_i}$$""")
 class CellContactVolumeInterfaceSparse(CellContactVolumeInterface):
     r"""pair_potential[cell_contact_dense] with each cell's volume fraction stored only on the lattice nodes its points deposit on, not on every node of the world: the dense [cells, nodes] array was 10^9 values for 634 cells.
     particle -> particle: as cell_contact_dense; with `contact_slack_block` (a width-1 cell block) the tolerated overlap is read per cell, the volume-fraction-weighted mean of the cells at each lattice node, instead of the one `contact_slack`.
 
-        E=E_{\rm overlap}-w\sum_{A<B}\gamma_{\tau_A\tau_B}\int\nabla\phi_A\cdot\nabla\phi_B\,dV\;\approx\;E_{\rm overlap}+\sum_{A<B}\gamma_{\tau_A\tau_B}\,S_{AB},\qquad \frac{\partial E}{\partial\phi_A(n)}=w\,\Delta x\sum_{B\neq A}\gamma_{\tau_A\tau_B}\,\nabla^2\phi_B(n)
+        E=E_{\rm overlap}-w\sum_{A<B}\gamma_{\tau_A\tau_B}\int\nabla\phi_A\cdot\nabla\phi_B\,dV\;\approx\;E_{\rm overlap}+\sum_{A<B}\gamma_{\tau_A\tau_B}\,S_{AB},\qquad E_{\rm overlap}=\Delta x^3\sum_n\tfrac{k}{2}\,(P_n-s_0)_+^2,\quad P_n=\sum_{A<B}\phi_A(n)\,\phi_B(n),\qquad \mathbf F_i=-\frac{\partial E}{\partial\mathbf x_i}
         E              the total contact energy
-        E_{overlap}    the overlap penalty of volume_energy
+        E_{overlap}    the overlap penalty: zero until two cells overlap by more than s_0 at a lattice node, then quadratic in the excess
+        P_n            the overlap at lattice node n, the sum of the pairwise products of the cells' volume fractions there
+        k              `repulsion_strength`, the overlap penalty's stiffness
+        s_0            `contact_slack`, the overlap tolerated at a node (per cell with `contact_slack_block`)
         w              `contact_edge_width`, the interface width factor
-        \gamma_{\tau_A\tau_B} `contact_surface_tension`, the tension of a contact between types tau_A and tau_B (a symmetric matrix, in the units of cell_surface_tension)
-        \phi_A, \phi_B the two cells' volume fractions
+        \gamma_{\tau_A\tau_B} `contact_surface_tension`, the tension of a contact between types tau_A and tau_B (a symmetric matrix, in the units of cell_surface_tension; negative = adhesion)
+        \phi_A, \phi_B the two cells' volume fractions (each cell's points smeared onto the lattice by quadratic B-spline weights)
         S_{AB}         the contact area of A and B
         \Delta x       the lattice spacing
+        F_i, x_i       the force on material point i and its position; F_i / m_i is the acceleration handed to the MPM substep
 
     Reference: as cell_contact_dense; Plexus exp27, the cell adhesion testbench (this work, 2026-10) (2026-10-20)."""
     # EXPLAIN: what the operator does, in plain English, for a click on its equation in the maths and plexus panes
     EXPLAIN = (
-        r"Keeps cells from overlapping and gives their contact a surface tension. Each cell has a volume fraction $\phi$ on a "
-        r"lattice; the energy is $E=E_{\rm "
+        r"Keeps cells from overlapping and gives their contact a surface tension. Each cell's points are smeared onto a "
+        r"lattice as a volume fraction $\phi$ (1 inside the cell, 0 outside); the energy is $E=E_{\rm "
         r"overlap}-w\sum_{A<B}\gamma_{\tau_A\tau_B}\int\nabla\phi_A\cdot\nabla\phi_B\,dV\;\approx\;E_{\rm "
-        r"overlap}+\sum_{A<B}\gamma_{\tau_A\tau_B}\,S_{AB}$: the overlap penalty of volume_energy plus, for every pair of cells "
-        r"$A$ and $B$, the tension $\gamma$ between their types times the area $S_{AB}$ of their interface ($w$ is "
-        r"`contact_edge_width`). The forces on the points are the gradient of $E$ with respect to $\phi$. This sparse variant "
-        r"stores $\phi$ only on the lattice nodes a cell's points deposit on, not on every node of the world (the dense array "
-        r"was $10^9$ values for 634 cells); with `contact_slack_block` the tolerated overlap is read per cell."
+        r"overlap}+\sum_{A<B}\gamma_{\tau_A\tau_B}\,S_{AB}$. The first term is the overlap penalty "
+        r"$E_{\rm overlap}=\Delta x^3\sum_n\tfrac{k}{2}\,(P_n-s_0)_+^2$, with $P_n=\sum_{A<B}\phi_A(n)\,\phi_B(n)$ the overlap of "
+        r"the cells at lattice node $n$: zero until the overlap passes $s_0$ (`contact_slack`), then quadratic in the excess, "
+        r"with stiffness $k$ (`repulsion_strength`); $\Delta x$ is the lattice spacing. The second gives every pair of cells "
+        r"$A$ and $B$ the tension $\gamma$ between their types times the area $S_{AB}$ of their interface ($w$ is "
+        r"`contact_edge_width`); a negative $\gamma$ is adhesion. The force on each point is minus the gradient of $E$ with "
+        r"respect to its position, $\mathbf F_i=-\partial E/\partial\mathbf x_i$, taken through $\phi$ in one pass (no "
+        r"minimisation); divided by the point's mass it is an acceleration the MPM substep adds to the point's velocity. "
+        r"This sparse variant stores $\phi$ only on the lattice nodes a cell's points deposit on, not on every node of the "
+        r"world (the dense array was $10^9$ values for 634 cells); with `contact_slack_block` the tolerated overlap is read per cell."
     )
     PARAM_UNITS = {}
-    SYMBOLS = {'E': 'the total contact energy', 'E_{overlap}': 'the overlap penalty of volume_energy', 'w': '`contact_edge_width`, the interface width factor', '\\gamma_{\\tau_A\\tau_B}': '`contact_surface_tension`, the tension of a contact between types tau_A and tau_B (a symmetric matrix, in the units of cell_surface_tension)', '\\phi_A, \\phi_B': "the two cells' volume fractions", 'S_{AB}': 'the contact area of A and B', '\\Delta x': 'the lattice spacing'}
+    SYMBOLS = {'E': 'the total contact energy', 'E_{overlap}': 'the overlap penalty: zero until two cells overlap by more than s_0 at a lattice node, then quadratic in the excess', 'P_n': "the overlap at lattice node n, the sum of the pairwise products of the cells' volume fractions there", 'k': '`repulsion_strength`, the overlap penalty\'s stiffness', 's_0': '`contact_slack`, the overlap tolerated at a node (per cell with `contact_slack_block`)', 'w': '`contact_edge_width`, the interface width factor', '\\gamma_{\\tau_A\\tau_B}': '`contact_surface_tension`, the tension of a contact between types tau_A and tau_B (a symmetric matrix, in the units of cell_surface_tension; negative = adhesion)', '\\phi_A, \\phi_B': "the two cells' volume fractions", 'S_{AB}': 'the contact area of A and B', '\\Delta x': 'the lattice spacing', '\\mathbf F_i, \\mathbf x_i': 'the force on material point i and its position; F_i / m_i is the acceleration handed to the MPM substep'}
 
     def _lattice_laplacian(self, A, per):
         """The lattice Laplacian of the dense fields A [k, nx, ny, nz], times the lattice spacing squared: the seven-point stencil (the six face neighbours less six times the node)."""
@@ -3738,6 +3854,96 @@ class SeedFromPointsRagged(SeedFromPoints):
         if self.value_block and "value" in z.files:
             b0, b1 = C.state_schema[str(self.value_block)]
             st[torch.as_tensor(live, device=st.device), b0:b1] = torch.as_tensor(z["value"].astype(np.float64), dtype=st.dtype, device=st.device)[:, None]
+        # `cell__<block>` in the table, [cells] or [cells, width]: written into the cell block of that name when the cell set declares it -- the per-body state
+        # an operator reads at the first frame (adhesion maxima `adh`, a chemical's starting level, a drive); a [cells] array fills every column of the block
+        for key in z.files:
+            if key.startswith("cell__") and key[6:] in C.state_schema:
+                b0, b1 = C.state_schema[key[6:]]
+                v = torch.as_tensor(z[key].astype(np.float64), dtype=st.dtype, device=st.device).reshape(nk, -1)
+                if v.shape[1] not in (1, b1 - b0):
+                    raise ValueError(f"seed_positions[from_points_ragged]: `{key}` has {v.shape[1]} columns, the cell block `{key[6:]}` has {b1 - b0}")
+                st[torch.as_tensor(live, device=st.device), b0:b1] = v.expand(nk, b1 - b0)
+        C.state = st
+        print(f"[seed_positions:from_points_ragged] {nk} bodies of {min(counts)} to {max(counts)} points ({int(sum(counts)):,} points in all) from {os.path.basename(self.points)}", flush=True)
+        return {}
+
+
+@register_operator("seed_positions", family="seed", set="particle", kind="seed", model="from_points_ragged_batched",
+                   title="seed MPM bodies of different point counts at the points of a table, all at once",
+                   equation=r"""$$\mathbf x_{k,j}=\mathbf o+\frac{\mathbf p_{k,j}-\mathbf m}{u},\quad V_{k,j}=\frac{V_k}{u^3 N_k},\qquad j<N_k$$""")
+class SeedFromPointsRaggedBatched(SeedFromPointsRagged):
+    r"""seed_positions[from_points_ragged_batched]: seed_positions[from_points_ragged] writing every body in one call per block instead of one body at a time: the same slots, positions, volumes, masses and
+    labels (tests/test_exp09_landscape_ops.py: the state equal to the default's), in seconds instead of hours at 10 million bodies.
+    pt -> pt, cell: as from_points_ragged.
+
+        \mathbf x_{k,j}=\mathbf o+\frac{\mathbf p_{k,j}-\mathbf m}{u},\quad V_{k,j}=\frac{V_k}{u^3 N_k},\qquad j<N_k
+        x_{k,j}        the world position of point j of cell k, world length
+        N_k            the number of finite rows of cell k in the table: its point count
+        o              `centre`: the world point the micrometre point m maps to (default the box centre)
+        p_{k,j}        the table's position, micrometres, x y z order (NaN in the rows a body does not use)
+        m              `centre_um`: the micrometre point (x y z) placed at o
+        u              `um_per_unit`: micrometres per world length unit
+        V_k            the cell's volume `volume_um3`, micrometres cubed, shared by its N_k points
+
+    Reference: as from_points_ragged; Plexus exp09 (this work, 2026-11-17)."""
+
+    def forward(self, H, mask=None):
+        P, C = H.level(self.at), H.level(self.cell_set)
+        z = np.load(self.points); pos = z["pos"].astype(np.float64); vol = z["volume_um3"].astype(np.float64)       # (cells, N_max, 3) x y z, um; NaN rows = unused
+        nk = pos.shape[0]
+        live_all = np.flatnonzero(C.occ.detach().cpu().numpy() > 0.5)
+        if len(live_all) < nk:
+            raise ValueError(f"seed_positions[from_points_ragged]: the cell set has {len(live_all)} live cells but {self.points} holds {nk}; set `sets.{self.cell_set}.n` to at least {nk}")
+        live = live_all[:nk]
+        if len(live_all) > nk:
+            cocc = C.occ.clone(); cocc[torch.as_tensor(live_all[nk:], device=cocc.device)] = 0.0; C.occ = cocc
+        o = (0.5 * np.asarray(H.world_size, dtype=np.float64)[:3]) if self.centre is None else self.centre
+        parent = P.parent.detach().cpu().numpy(); dev, dt_ = P.state.device, P.state.dtype
+        occ = torch.zeros_like(P.occ); cen = np.zeros((C.state.shape[0], 3)); nt = C.node_type.detach().cpu().numpy()
+        order = np.argsort(parent, kind="stable"); first = np.searchsorted(parent[order], np.arange(C.state.shape[0] + 1))      # the points of cell c: order[first[c]:first[c + 1]]
+        # ALL BODIES AT ONCE: the slots, positions, volumes and labels of every body gathered in numpy and written in one call each -- the loop above writes the
+        # same values body by body, but every call clones the whole point state (_mpm_reset_points, _set_block), 2.8 GB at 70 million points: about 14 hours for
+        # 10 million bodies (exp09 b10m, 2026-11-17)
+        fin = np.isfinite(pos).all(2)                                                     # [cells, N_max]: the rows a body uses, in table order
+        npk = fin.sum(1).astype(np.int64)
+        if (npk == 0).any():
+            raise ValueError(f"seed_positions[from_points_ragged]: body {int(np.flatnonzero(npk == 0)[0])} of {self.points} has no finite point")
+        have = first[live + 1] - first[live]
+        if (npk > have).any():
+            k = int(np.flatnonzero(npk > have)[0])
+            raise ValueError(f"seed_positions[from_points_ragged]: body {k} has {int(npk[k])} points but a cell of `{self.at}` has {int(have[k])} slots; raise `sets.{self.at}.per_parent`")
+        kk = np.repeat(np.arange(nk), npk)                                               # the body of every seeded point, bodies in table order
+        jj = np.arange(len(kk)) - np.repeat(np.cumsum(npk) - npk, npk)                   # its rank among its body's points
+        blk_all = order[first[live][kk] + jj]                                            # its slot: the j-th slot of its cell, as the loop takes them
+        x_all = o + (pos[fin] - self.centre_um) / self.u
+        idx = torch.as_tensor(blk_all, device=dev)
+        _mpm_reset_points(P, idx, torch.as_tensor(x_all, device=dev, dtype=dt_), torch.as_tensor(vol[kk] / self.u ** 3 / npk[kk], device=dev, dtype=dt_))
+        cells = live[kk].astype(np.float64)
+        _set_block(P, "pid", idx, torch.as_tensor(cells, device=dev, dtype=dt_)); _set_block(P, "cellc", idx, torch.as_tensor(cells % 20, device=dev, dtype=dt_))
+        if "tcol" in P.state_schema:
+            _set_block(P, "tcol", idx, torch.as_tensor(nt[live[kk]].astype(np.float64), device=dev, dtype=dt_))
+        if "face" in P.state_schema:
+            _set_block(P, "face", idx, float(FACE_L))
+        occ[idx] = 1.0
+        sums = np.zeros((nk, 3))
+        np.add.at(sums, kk, x_all)
+        cen[live] = sums / npk[:, None]
+        counts = npk.tolist()
+        P.occ = occ
+        ca, cb = C.state_schema["pos"]
+        st = C.state.clone(); st[:, ca:cb] = torch.as_tensor(cen, dtype=st.dtype, device=st.device)
+        if self.value_block and "value" in z.files:
+            b0, b1 = C.state_schema[str(self.value_block)]
+            st[torch.as_tensor(live, device=st.device), b0:b1] = torch.as_tensor(z["value"].astype(np.float64), dtype=st.dtype, device=st.device)[:, None]
+        # `cell__<block>` in the table, [cells] or [cells, width]: written into the cell block of that name when the cell set declares it -- the per-body state
+        # an operator reads at the first frame (adhesion maxima `adh`, a chemical's starting level, a drive); a [cells] array fills every column of the block
+        for key in z.files:
+            if key.startswith("cell__") and key[6:] in C.state_schema:
+                b0, b1 = C.state_schema[key[6:]]
+                v = torch.as_tensor(z[key].astype(np.float64), dtype=st.dtype, device=st.device).reshape(nk, -1)
+                if v.shape[1] not in (1, b1 - b0):
+                    raise ValueError(f"seed_positions[from_points_ragged]: `{key}` has {v.shape[1]} columns, the cell block `{key[6:]}` has {b1 - b0}")
+                st[torch.as_tensor(live, device=st.device), b0:b1] = v.expand(nk, b1 - b0)
         C.state = st
         print(f"[seed_positions:from_points_ragged] {nk} bodies of {min(counts)} to {max(counts)} points ({int(sum(counts)):,} points in all) from {os.path.basename(self.points)}", flush=True)
         return {}

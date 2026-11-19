@@ -1,0 +1,440 @@
+point_spacing_nm: 1.0
+volume_per_residue_nm3: 0.133
+bodies:
+- key: Osk
+  name: Short Oskar
+  residues: 468
+  points: 62
+  lobes:
+  - residues: 94
+    folded: true
+    points: 15
+  - residues: 172
+    folded: false
+    points: 22
+  - residues: 198
+    folded: true
+    points: 25
+  centres_nm:
+  - - 0.0
+    - 0.0
+    - 0.0
+  - - 0.01
+    - 1.89
+    - -1.73
+  - - -1.82
+    - 0.96
+    - -3.76
+  radii_nm:
+  - 1.44
+  - 1.76
+  - 1.85
+  one_piece: true
+- key: Vas
+  name: Vasa
+  residues: 661
+  points: 88
+  lobes:
+  - residues: 200
+    folded: false
+    points: 27
+  - residues: 423
+    folded: true
+    points: 61
+  centres_nm:
+  - - 0.0
+    - 0.0
+    - 0.0
+  - - -0.51
+    - -3.33
+    - -0.27
+  radii_nm:
+  - 1.85
+  - 2.38
+  one_piece: true
+- key: Tud
+  name: Tudor
+  residues: 2515
+  points: 334
+  lobes:
+  - residues: 192
+    folded: true
+    points: 26
+  - residues: 185
+    folded: false
+    points: 26
+  - residues: 308
+    folded: true
+    points: 43
+  - residues: 47
+    folded: true
+    points: 5
+  - residues: 234
+    folded: false
+    points: 35
+  - residues: 166
+    folded: true
+    points: 23
+  - residues: 69
+    folded: true
+    points: 8
+  - residues: 54
+    folded: false
+    points: 7
+  - residues: 181
+    folded: true
+    points: 26
+  - residues: 135
+    folded: false
+    points: 19
+  - residues: 349
+    folded: true
+    points: 48
+  - residues: 172
+    folded: true
+    points: 24
+  - residues: 174
+    folded: true
+    points: 22
+  - residues: 166
+    folded: true
+    points: 22
+  centres_nm:
+  - - 0.0
+    - 0.0
+    - 0.0
+  - - 1.37
+    - 2.38
+    - -0.94
+  - - 3.5
+    - 3.63
+    - -2.9
+  - - 3.46
+    - 6.12
+    - -2.08
+  - - 2.72
+    - 8.41
+    - -2.66
+  - - 1.13
+    - 9.78
+    - -4.75
+  - - 1.74
+    - 8.62
+    - -6.8
+  - - 1.03
+    - 6.87
+    - -6.14
+  - - 0.68
+    - 5.41
+    - -7.99
+  - - -1.3
+    - 3.59
+    - -8.51
+  - - -3.19
+    - 2.77
+    - -6.22
+  - - -5.89
+    - 2.52
+    - -7.91
+  - - -5.3
+    - 3.24
+    - -10.58
+  - - -7.51
+    - 2.21
+    - -11.96
+  radii_nm:
+  - 1.83
+  - 1.8
+  - 2.14
+  - 1.14
+  - 1.95
+  - 1.74
+  - 1.3
+  - 1.2
+  - 1.79
+  - 1.62
+  - 2.23
+  - 1.76
+  - 1.77
+  - 1.74
+  one_piece: true
+- key: Aub
+  name: Aubergine
+  residues: 866
+  points: 115
+  lobes:
+  - residues: 91
+    folded: false
+    points: 14
+  - residues: 775
+    folded: true
+    points: 101
+  centres_nm:
+  - - 0.0
+    - 0.0
+    - 0.0
+  - - 2.4
+    - -2.23
+    - 1.14
+  radii_nm:
+  - 1.42
+  - 2.91
+  one_piece: true
+- key: Bru
+  name: Bruno
+  residues: 604
+  points: 80
+  lobes:
+  - residues: 149
+    folded: false
+    points: 18
+  - residues: 149
+    folded: true
+    points: 22
+  - residues: 218
+    folded: false
+    points: 28
+  - residues: 81
+    folded: true
+    points: 12
+  centres_nm:
+  - - 0.0
+    - 0.0
+    - 0.0
+  - - 0.05
+    - 2.0
+    - 1.8
+  - - 1.79
+    - 1.82
+    - 4.07
+  - - 4.04
+    - 1.37
+    - 2.82
+  radii_nm:
+  - 1.68
+  - 1.68
+  - 1.91
+  - 1.37
+  one_piece: true
+- key: Stau
+  name: Staufen
+  residues: 1026
+  points: 136
+  lobes:
+  - residues: 309
+    folded: false
+    points: 35
+  - residues: 73
+    folded: true
+    points: 12
+  - residues: 137
+    folded: false
+    points: 18
+  - residues: 40
+    folded: true
+    points: 6
+  - residues: 71
+    folded: true
+    points: 12
+  - residues: 62
+    folded: false
+    points: 8
+  - residues: 72
+    folded: true
+    points: 12
+  - residues: 169
+    folded: false
+    points: 22
+  - residues: 70
+    folded: true
+    points: 11
+  centres_nm:
+  - - 0.0
+    - 0.0
+    - 0.0
+  - - -0.01
+    - 2.26
+    - 1.6
+  - - 0.78
+    - 4.05
+    - 0.27
+  - - 2.73
+    - 4.0
+    - 1.24
+  - - 4.27
+    - 4.78
+    - 2.07
+  - - 4.14
+    - 6.17
+    - 3.56
+  - - 2.13
+    - 5.96
+    - 3.19
+  - - 1.0
+    - 7.75
+    - 1.96
+  - - 1.89
+    - 9.74
+    - 0.85
+  radii_nm:
+  - 2.14
+  - 1.32
+  - 1.63
+  - 1.08
+  - 1.31
+  - 1.25
+  - 1.32
+  - 1.75
+  - 1.31
+  one_piece: true
+- key: Hrp48
+  name: Hrp48
+  residues: 421
+  points: 56
+  lobes:
+  - residues: 79
+    folded: true
+    points: 7
+  - residues: 78
+    folded: true
+    points: 12
+  - residues: 248
+    folded: false
+    points: 37
+  centres_nm:
+  - - 0.0
+    - 0.0
+    - 0.0
+  - - 1.07
+    - -1.8
+    - 0.56
+  - - 3.64
+    - -1.76
+    - -0.17
+  radii_nm:
+  - 1.36
+  - 1.35
+  - 1.99
+  one_piece: true
+- key: Cup
+  name: Cup
+  residues: 1117
+  points: 149
+  lobes:
+  - residues: 810
+    folded: false
+    points: 107
+  - residues: 92
+    folded: true
+    points: 13
+  - residues: 215
+    folded: false
+    points: 29
+  centres_nm:
+  - - 0.0
+    - 0.0
+    - 0.0
+  - - 1.23
+    - -1.73
+    - -2.79
+  - - 2.88
+    - -1.78
+    - -4.88
+  radii_nm:
+  - 2.95
+  - 1.43
+  - 1.9
+  one_piece: true
+- key: Glo
+  name: Glorund
+  residues: 586
+  points: 78
+  lobes:
+  - residues: 47
+    folded: false
+    points: 6
+  - residues: 185
+    folded: true
+    points: 25
+  - residues: 246
+    folded: false
+    points: 35
+  - residues: 79
+    folded: true
+    points: 12
+  centres_nm:
+  - - 0.0
+    - 0.0
+    - 0.0
+  - - 2.16
+    - 0.75
+    - -0.56
+  - - 3.55
+    - 2.23
+    - 1.7
+  - - 5.21
+    - 2.87
+    - 3.69
+  radii_nm:
+  - 1.14
+  - 1.8
+  - 1.98
+  - 1.36
+  one_piece: true
+- key: Smg
+  name: Smaug
+  residues: 999
+  points: 133
+  lobes:
+  - residues: 70
+    folded: false
+    points: 7
+  - residues: 50
+    folded: true
+    points: 7
+  - residues: 75
+    folded: false
+    points: 9
+  - residues: 87
+    folded: true
+    points: 11
+  - residues: 312
+    folded: false
+    points: 43
+  - residues: 170
+    folded: true
+    points: 23
+  - residues: 235
+    folded: false
+    points: 33
+  centres_nm:
+  - - 0.0
+    - 0.0
+    - 0.0
+  - - 0.96
+    - 1.69
+    - -0.36
+  - - 1.65
+    - 1.22
+    - -2.18
+  - - 0.33
+    - 1.48
+    - -3.9
+  - - -1.72
+    - 2.57
+    - -5.55
+  - - -3.49
+    - 3.66
+    - -7.88
+  - - -2.43
+    - 2.74
+    - -10.5
+  radii_nm:
+  - 1.31
+  - 1.17
+  - 1.34
+  - 1.4
+  - 2.15
+  - 1.75
+  - 1.95
+  one_piece: true

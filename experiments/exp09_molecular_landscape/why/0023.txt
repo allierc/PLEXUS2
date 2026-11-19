@@ -1,0 +1,4 @@
+time   2026-11-18 06:15:40
+run    tissue/exp09_land_a100k (mpm; drawn from the bodies' centres and, in the window, their points: tools/exp09_landscape.py render_chunk)
+drawn  chunks 6, frames 0 to 1500 of 4000
+why    TWIN A of step 21 at 100,000 molecules: it33's scene (the valence rule -- dimers 2 bonds, three-lobed complexes 3, tetramers 4, each kind binding its own; the walking motors; the passive crowd) with every count x 263 and the slab widened 16.2 x in x and y to 3.1 x 1.75 um, its depth (52 nm) and its share of the volume (19 %) kept, every body as in step 21; 1,000 frames (200 us) on one H200. At left the whole slab, every body a dot at its centre; at right a 192 x 108 nm window from its centre, the size of step 21's whole slab, every body drawn by its points. Do the chains, trees and networks of step 21 form alike when the crowd is 263 times larger. RUNNING: frame 1,500 of 4,000; 100,000 bodies, 452 bonds held in the window; 26.5 s per frame

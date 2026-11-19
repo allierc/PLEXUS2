@@ -1,0 +1,71 @@
+{
+ "Osk": [
+  [
+   "P25158",
+   606,
+   "RecName: Full=Maternal effect protein oskar"
+  ]
+ ],
+ "Vas": [
+  [
+   "P09052",
+   661,
+   "RecName: Full=ATP-dependent RNA helicase vasa; AltName: Full=Antigen M"
+  ]
+ ],
+ "Tud": [
+  [
+   "P25823",
+   2515,
+   "RecName: Full=Protein tudor"
+  ]
+ ],
+ "Aub": [
+  [
+   "O76922",
+   866,
+   "RecName: Full=Protein aubergine; AltName: Full=Protein sting"
+  ]
+ ],
+ "Bru": [
+  [
+   "Q08473",
+   344,
+   "RecName: Full=RNA-binding protein squid; AltName: Full=Heterogeneous n"
+  ]
+ ],
+ "Stau": [
+  [
+   "P25159",
+   1026,
+   "RecName: Full=Maternal effect protein staufen"
+  ]
+ ],
+ "Hrp48": [
+  [
+   "P48809",
+   421,
+   "RecName: Full=Heterogeneous nuclear ribonucleoprotein 27C; Short=Hrb27"
+  ]
+ ],
+ "Cup": [
+  [
+   "Q9VMA3",
+   1117,
+   "RecName: Full=Protein cup; AltName: Full=Oskar ribonucleoprotein compl"
+  ]
+ ],
+ "Glo": [],
+ "Smg": [
+  [
+   "Q23972",
+   999,
+   "RecName: Full=Protein Smaug"
+  ],
+  [
+   "Q9VXE0",
+   76,
+   "RecName: Full=Probable small nuclear ribonucleoprotein G; Short=snRNP-"
+  ]
+ ]
+}

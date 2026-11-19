@@ -1,0 +1,286 @@
+general:
+  name: exp09_land_it24
+  headline: 'exp09 it24: a crowded molecular landscape of 215 MPM bodies (10 % of a slab 192 x 108 x 52 nm)'
+  title: 'iteration 24 -- ADDED: GROWTH AND DIVISION (cell_grow[mpm], cell_populate[mpm], cell_cycle[mpm], cell_divide[cleave_typed]). Ten red 10 nm globules are replicators: each gains material points at a rate that doubles it in 220 frames, and is cleaved in two when it has doubled; the 205 other bodies are passive. Do the ten become about 200 in the 1,000 frames, each lineage a growing colony pushing the passive crowd aside'
+  seed: 1
+  n_frames: 1000
+  dt: 1.0
+  record_cap: 251
+  save_every_min: 10.0
+  boundary: free
+  dim: 3
+  world:
+  - 20.4
+  - 12.0
+  - 6.4
+  units:
+    length_um: 0.01
+    time_s: 2.0e-07
+fields:
+  mpm_grid:
+    frame: mpm_grid
+    n_grid: 15
+    per_parent: cell
+    cell_box: 3.0
+sets:
+  cell:
+    n: 215
+    buffer: 515
+    type_layout: ordered
+    types:
+      small:
+        count: 100
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      clover:
+        count: 30
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      dimer:
+        count: 40
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      bean:
+        count: 20
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      ring:
+        count: 15
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      replicator:
+        count: 10
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: rate
+        record: false
+      mass:
+        width: 1
+      mass0:
+        width: 1
+        record: false
+      born:
+        width: 1
+        record: false
+      div_ready:
+        width: 1
+        record: false
+      grate:
+        width: 1
+        record: false
+  pt:
+    entity: mpm_particle
+    parent: cell
+    per_parent: 343
+    density: 1.0
+    radius: 0.5
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: rate
+        record: false
+      pid:
+        width: 1
+      cellc:
+        width: 1
+        record: false
+operators:
+- op: thermal_bath
+  implementation: langevin
+  at: pt
+  friction: 0.0125
+  kT: 2.5e-05
+  substep_dt: 0.01
+  seed: 1
+- op: active_force
+  model: box_slab
+  at: pt
+  wall_stiffness: 400.0
+  lo:
+  - 0.6
+  - 0.6
+  - 0.6
+  hi:
+  - 19.8
+  - 11.4
+  - 5.8
+- op: pair_potential
+  model: cell_contact
+  at: pt
+  cells: cell
+  repulsion_strength: 600.0
+  contact_slack: 0.2
+  contact_surface_tension:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  contact_edge_width: 0.2
+- op: mpm_strain
+  at: pt
+  implementation: default
+- op: mpm_scatter
+  at: mpm_grid
+  from: pt
+  drag: 0.0
+  implementation: default
+- op: mpm_grid_update
+  at: mpm_grid
+  implementation: warp_pp_balanced
+- op: mpm_gather
+  at: pt
+  from: mpm_grid
+  implementation: default
+- op: aggregate_centroid
+  at: cell
+  child: pt
+- op: cell_cycle
+  model: mpm
+  at: cell
+  rule: doubler_mass
+  factor: 2.0
+  factor_cv: 0.1
+  mark: div_ready
+  born: born
+  seed: 1
+- op: cell_grow
+  model: mpm
+  at: cell
+  points: pt
+  rate: 0.0
+  rate_block: grate
+  dims: 3.0
+  rho: 1.0
+- op: cell_populate
+  model: mpm_interior
+  at: cell
+  points: pt
+  jitter: 0.3
+  swell: true
+  seed: 1
+- op: cell_divide
+  model: cleave_typed
+  at: cell
+  points: pt
+  yolk_weight: 0.0
+  p_div: 1.0
+  max_per_call: 64
+  mark: div_ready
+  daughter_mark: born
+  inherit:
+  - grate
+  gap: 0.1
+  seed: 1
+schedule:
+- steps:
+  - thermal_bath
+  - active_force
+  - pair_potential
+  - mpm_strain
+  - mpm_scatter
+  - mpm_grid_update
+  - mpm_gather
+  substep_dt: 0.01
+  capture: false
+- aggregate_centroid
+- cell_cycle
+- cell_grow
+- cell_populate
+- cell_divide
+seed:
+- op: seed_positions
+  model: from_points_ragged
+  at: pt
+  cell_set: cell
+  points: experiments/exp09_molecular_landscape/data/seed_it24.npz
+  um_per_unit: 0.01
+  centre_um:
+  - 0.0
+  - 0.0
+  - 0.0
+  centre:
+  - 0.0
+  - 0.0
+  - 0.0
+plotting:
+  renderer: vtk_points
+  subject: pt
+  render_3d: contour
+  point_volume: 0.008000000000000002
+  cell_colours: type
+  colors:
+    small: '#8AC926'
+    clover: '#4D96FF'
+    dimer: '#00BBF9'
+    bean: '#2A9D8F'
+    ring: '#43AA8B'
+    replicator: '#E63946'
+  surface_opacity: 1.0
+  background: '#8d99a6'
+  foreground: white
+  box_frame: false
+  camera:
+    elev: 90
+    azim: -90
+  zoom: 1.0
+  duration_s: 10
+  slow_motion: 1

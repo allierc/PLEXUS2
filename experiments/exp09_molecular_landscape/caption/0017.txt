@@ -1,0 +1,4 @@
+- video name: 0017
+- description: The simulation shows a collection of 370 bodies evolving over a period of 200 microseconds. Initially, the bodies are distributed somewhat uniformly across the space, with some larger clusters forming on the left side. As time progresses, the bodies move and rearrange, with the large pale-yellow cluster on the left gradually breaking apart and dispersing. By the end of the sequence, the bodies have reached a more homogeneous distribution throughout the field.
+- objects: The scene contains 370 bodies of various shapes, including spheres, elongated rods, and irregular blobs. These bodies are colored in distinct shades of blue, teal, orange, lime green, and pale yellow. Most objects are small and isolated, while some larger, more complex shapes appear to be connected or in close proximity. A scale bar in the bottom left corner indicates that the spatial dimensions are measured in nanometers.
+

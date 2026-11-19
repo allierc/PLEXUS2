@@ -18,6 +18,14 @@ from plexus.schema import Spec
 
 
 # _setup_recording: Allocate the decimated trajectory buffers -> (rec_index, rec_sets, occ_sets, rec_state, rec_mesh, fstride, rec_fields).
+# _unrecorded: The sets whose spec says `record: false` -> set of names.
+def _unrecorded(sim) -> set:
+    """Sets declared with `record: false`: none of their rows is kept (positions, live mask, state blocks, types). For a set too large to
+    store per row and not needed after the run -- the 13 to 70 million material points of a run whose bodies are read from their centres
+    alone (exp09 a100k, b10m: 100,000 and 10,000,000 bodies)."""
+    return {n for n, s in (getattr(sim, "sets", None) or {}).items() if isinstance(s, dict) and s.get("record", True) is False}
+
+
 def _setup_recording(sim: Spec, H: Hierarchy):
     """Allocate the DECIMATED trajectory buffers and announce the recording plan.
 
@@ -40,13 +48,16 @@ def _setup_recording(sim: Spec, H: Hierarchy):
     rec_index = {t: i for i, t in enumerate(rec_ticks)}      # tick -> row index in the recording arrays
     n_rec = len(rec_ticks)
     # pos [n_rec, N, D] for spatial sets; a non-spatial set (voltage, ...) records its blocks in `rec_state`
+    skip = _unrecorded(sim)                                                                             # `record: false` sets: no buffers at all
     rec_sets = {name: np.zeros((n_rec, lvl.n, H.dim), np.float32)
-                for name, lvl in H.levels.items() if "pos" in lvl.state_schema}
-    occ_sets = {name: np.zeros((n_rec, lvl.n), bool) for name, lvl in H.levels.items()}               # live mask  [n_rec, N]
+                for name, lvl in H.levels.items() if "pos" in lvl.state_schema and name not in skip}
+    occ_sets = {name: np.zeros((n_rec, lvl.n), bool) for name, lvl in H.levels.items() if name not in skip}   # live mask  [n_rec, N]
     H._type_hist = {}                                                                                   # per-row node_type, typed sets only
     # state/ group: every recorded block except `pos` -> [n_rec, N, width] (e.g. a neuron's voltage / calcium)
     rec_state: dict[str, dict] = {}
     for name, lvl in H.levels.items():
+        if name in skip:
+            continue
         blocks = [b for b in lvl.state_schema.recorded if b.name != "pos"]
         if blocks:
             rec_state[name] = {b.name: np.zeros((n_rec, lvl.n, b.width), np.float32) for b in blocks}
@@ -59,7 +70,8 @@ def _setup_recording(sim: Spec, H: Hierarchy):
     rec_fields: dict[str, list] = {fn: [] for fn in H.fields}
     if not utils._QUIET:
         print(f"[engine] {sim.n_frames} sim frames -> recording {n_rec} set frames (stride "
-              f"{sstride}), fields every {fstride} steps (<= {field_cap})", flush=True)
+              f"{sstride}), fields every {fstride} steps (<= {field_cap})"
+              + (f"; NOT recorded (record: false): {sorted(skip)}" if skip else ""), flush=True)
     return rec_index, rec_sets, occ_sets, rec_state, rec_mesh, fstride, rec_fields
 
 
@@ -104,7 +116,7 @@ def _assemble(H, sim, rec_sets, occ_sets, rec_state, rec_fields, n_rows=None, re
                            "parent_name": getattr(H.level(name), "parent_name", None),
                            "parent": (H.level(name).parent.cpu().numpy()
                                       if H.level(name).parent.numel() else None)}
-                    for name in H.levels},
+                    for name in H.levels if name in occ_sets},      # a `record: false` set is left out
            "fields": {fn: {"grid": np.stack(fr[:n_rows] if n_rows else fr), "colors": _field_colors(H, sim, H.fields[fn]),
                            "world": H.world_width}
                       for fn, fr in rec_fields.items() if fr},
@@ -127,6 +139,8 @@ def record_levels(H, ri: int, rec_sets: dict, occ_sets: dict, rec_state: dict, r
     """`rec_sets` and `occ_sets` hold one array per recorded set (positions and live mask), `rec_state` the extra recorded blocks,
     `rec_mesh` the mesh snapshots; all are filled in place, and `H._type_hist` keeps the type column per row."""
     for name, lvl in H.levels.items():
+        if name not in occ_sets:                          # a `record: false` set (`_unrecorded`)
+            continue
         # detach: under grad=True the trajectory is a record, never a gradient path
         if name in rec_sets:                              # spatial: the pos trajectory
             rec_sets[name][ri] = _rec0(lvl.get("pos")).detach().cpu().numpy()
