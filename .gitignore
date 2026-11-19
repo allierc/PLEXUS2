@@ -9,18 +9,19 @@ __pycache__/
 graphs_data/
 log/
 
-# experiment records: the specs and the why notes are tracked; movies, stills and the panes the viewer draws (story/) are not
+# experiment records: the specs and the why notes are tracked; movies, stills, the panes the viewer draws (story/) and the notes (experiments/*.md) are not
 experiments/*/mp4/
 experiments/*/png/
 experiments/*/data/*.png
 experiments/*/data/*.mp4
 experiments/*/story/
+experiments/*.md
+!experiments/INSTRUCTION.md
 
-# simulation data, except the seed tables the exp09 specs read
+# simulation data, except the seed tables the record specs read
 *.npz
 *.npy
-!experiments/exp09_molecular_landscape/data/seed_it*.npz
-!experiments/exp09_molecular_landscape/data/seed_rna*.npz
+!experiments/*/data/seed_*.npz
 
 # drafts the GUI writes from a prompt
 config/studio/

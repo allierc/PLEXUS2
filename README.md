@@ -10,4 +10,4 @@ python Plexus_Main.py -o generate tissue/exp33_ucb_flat_e000_h150_e07 --output_r
 
 The watcher shows the records of `experiments/`, one at a time (`?rec=experiments/<name>`).
 
-To start a new experiment, follow `Plexus/experiments/INSTRUCTION.md` in the Plexus repository.
+To start a new experiment, follow [`experiments/INSTRUCTION.md`](experiments/INSTRUCTION.md).
