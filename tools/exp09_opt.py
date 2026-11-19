@@ -249,10 +249,14 @@ def traj_health(run, rows=(50, 125, 250)):
         jo = z["junction__occ"][r] > 0.5
         out.append(dict(row=int(r), frame=int(4 * r), rg_min=float(ratio.min()), rg_max=float(ratio.max()), rg_out=int(((ratio < 0.8) | (ratio > 1.25)).sum()), bond_max=float(bl.max()),
                         bond_out=int((bl > 1.5).sum()), held=int((z["junction__rho"][r][..., 0][jo] > 0.5).sum()), rows=int(jo.sum()),
-                        step4_nm=float(np.sqrt(((c - cp) ** 2).sum(1).mean()) * E.NM), finite=bool(np.isfinite(X[r][occ[r]]).all())))
+                        step4_nm=float(np.sqrt(((c - cp) ** 2).sum(1).mean()) * E.NM), finite=bool(np.isfinite(X[r][occ[r]]).all()),
+                        # the swelling per size class: the 27-point mRNA subunits (they swell slowly, the more the longer the substep) and the 64-point proteins
+                        rg_mean_small=float(ratio[sub].mean()), rg_p999_small=float(np.percentile(ratio[sub], 99.9)), rg_max_small=float(ratio[sub].max()),
+                        n110_small=int((ratio[sub] > 1.10).sum()), rg_mean_large=float(ratio[prot].mean()), rg_max_large=float(ratio[prot].max()), bond_mean=float(bl.mean())))
         q = out[-1]
         print(f"{run} frame {q['frame']}: radius of gyration over start {q['rg_min']:.3f} to {q['rg_max']:.3f} (outside 0.8-1.25: {q['rg_out']}), chain bond over start at most {q['bond_max']:.3f} "
-              f"(over 1.5: {q['bond_out']}), held bonds {q['held']} (rows {q['rows']}), motion over 4 frames {q['step4_nm']:.4f} nm, finite {q['finite']}", flush=True)
+              f"(over 1.5: {q['bond_out']}), held bonds {q['held']} (rows {q['rows']}), motion over 4 frames {q['step4_nm']:.4f} nm, finite {q['finite']}; 27-point bodies mean {q['rg_mean_small']:.4f}, "
+              f"99.9 % {q['rg_p999_small']:.4f}, largest {q['rg_max_small']:.4f}, over 1.10: {q['n110_small']}; 64-point bodies mean {q['rg_mean_large']:.4f}, largest {q['rg_max_large']:.4f}", flush=True)
     return out
 
 

@@ -1,0 +1,30 @@
+# The same packages as environment.linux.yaml, unpinned, for a Mac (no NVIDIA GPU). The watcher, the specs and the CPU operators
+# work; the scenes of exp09 and exp10 do not run (their substep operators are NVIDIA Warp kernels that need a CUDA GPU).
+#   conda env create -f envs/environment.mac.yaml
+#   conda activate plexus
+name: plexus
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.12
+  - pip
+  - numpy
+  - scipy
+  - matplotlib
+  - pyyaml
+  - tqdm
+  - zarr
+  - tifffile
+  - pillow
+  - imageio
+  - imageio-ffmpeg
+  - vtk
+  - pyvista
+
+  - pip:
+      - torch
+      - torch_geometric
+      - warp-lang
+      - pytest
+      - -e ..

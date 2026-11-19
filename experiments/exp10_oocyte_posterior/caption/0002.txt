@@ -1,0 +1,4 @@
+- video name: 0002
+- description: The simulation shows a dense cluster of molecular chains evolving over a period of 25 microseconds. As time progresses, the number of bonds between the molecular components increases significantly from 59 to 2,184. The spatial arrangement of the molecules remains relatively stable, though internal configurations shift slightly. The heatmaps on the right indicate that the free energy ($\Delta G$) and bond connectivity patterns are dynamic but follow a structured progression.
+- objects: The scene contains 11,672 bodies arranged in a complex, intertwined network of long polymer-like chains. These chains are composed of small spherical particles in various colors, including red, yellow, blue, and cyan. The molecules are densely packed into a roughly ellipsoidal cluster with many overlapping and crossing segments. The size of individual particles is uniform, while the overall length of the chains varies across the assembly.
+
