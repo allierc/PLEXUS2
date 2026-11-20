@@ -1567,6 +1567,9 @@ FRAME = (1920, 1088)           # px: 16:9 as the slab, both sides multiples of t
 MIN_PTS = 16                   # a body of fewer live points is not drawn (a dormant slot's leftovers); a coarse scene's 7-point bodies set it lower (big_first)
 CLOCK = None                   # the clock's text in place of the drawn count and the time (big_first: the whole slab's count); or a function of the drawn row
 FRAME_HOOK = None              # a function (row, frame) -> frame applied to every drawn frame before it is written (render_piece: the inset)
+FAST_DRAW = True               # `render` takes a row's surfaces from tools/exp09_render_fast.py, which builds in batches the vertices exp23_studio._cell_surface gives per body, and reads
+                               # a finished run a row at a time. The same pixels (2026-11-19: 0 differ on frames of exp10, of step 26 and of 7 older scenes; exp10's movie the same file,
+                               # 5 min for 62; experiments/exp10_oocyte_posterior/data/session/render_report.md). False: the loop below, one pyvista mesh per body
 VIEW_ANGLE = 20.0              # degrees: a narrow lens, so the near face of the slab is drawn only 1.09x larger than its middle
 ZOOM = 1.03                    # the slab's middle plane is 3 % taller than the frame: the picture bleeds off every edge
 FADE = 0.25                    # share of the ground's colour mixed into a body at the far face of the slab (0 at the near face): far bodies paler
@@ -1620,6 +1623,7 @@ def render(key, run=None, name=None, last_only=False, max_frames=300, fps=25, ro
     from matplotlib.colors import to_rgb
     from plexus.gui import flat_ink
     e23._LOOK.clear(); e23._LOOK.update(e23.LOOK["ink"])
+    RF = __import__("exp09_render_fast") if FAST_DRAW else None      # FAST_DRAW: the three places marked below; with FAST_DRAW off nothing of it runs
     run = run or run_name(key)
     name = name or run
     if not os.path.exists(os.path.join(GD, run, "trajectory.npz")):
@@ -1630,7 +1634,7 @@ def render(key, run=None, name=None, last_only=False, max_frames=300, fps=25, ro
     spec, _ = S.read_spec(d)
     for i in range(4):                                          # a partial save may be caught half written
         try:
-            R = S.MPMRun(d, spec)
+            R = (S.MPMRun if RF is None or last_only else RF.Run)(d, spec)      # FAST_DRAW: a finished run read a row at a time (last_only, a running job's partial save: read whole)
             R.positions(0)
             break
         except Exception as e:                                  # noqa: BLE001
@@ -1714,7 +1718,9 @@ def render(key, run=None, name=None, last_only=False, max_frames=300, fps=25, ro
         surfs = []
         centre = {}
         sec = (spec.get("plotting") or {}).get("section_z") if use_section else None
-        for part in np.split(idx, cut):
+        # >>> FAST_DRAW: exp09_render_fast.frame gives what this loop and the merge under it build -- the same vertices, normals, triangles, colours -- or None (it says why)
+        fast = None if RF is None else RF.frame(R, k, X, idx, cut, spec, sec, lo, hi, ncell, MIN_PTS, fill, idc, f_body, gval, gcol, h_vox, iso, blur)
+        for part in (np.split(idx, cut) if fast is None else ()):
             c = int(R.pid[k][part[0]])
             if len(part) < int((spec.get("plotting") or {}).get("min_points", MIN_PTS)) or c >= ncell:
                 continue
@@ -1739,7 +1745,11 @@ def render(key, run=None, name=None, last_only=False, max_frames=300, fps=25, ro
             s["rgb"] = np.tile(col, (s.n_points, 1))
             s["idrgb"] = np.tile(idc[c], (s.n_points, 1))
             surfs.append(s)
-        merged = surfs[0] if len(surfs) == 1 else pv.merge(surfs, merge_points=False)
+        if fast is not None:
+            merged, centre, surfs = fast                           # `surfs`: a range as long as the bodies drawn (the clock's count)
+        else:
+            merged = surfs[0] if len(surfs) == 1 else pv.merge(surfs, merge_points=False)
+        # <<< FAST_DRAW
         # pass 1: the bodies in their id colours, unlit -- which body each pixel shows -- and the depth of the frame
         pl.add_mesh(merged, scalars="idrgb", rgb=True, lighting=False, name="cell_all", show_scalar_bar=False, opacity=1.0, reset_camera=False)
         pl.renderer.ResetCameraClippingRange()

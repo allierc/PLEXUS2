@@ -144,7 +144,7 @@ def periodic_forward(self, H, mask=None):
     X = P.get("pos").detach()[live].double()
     Xw = X - Lt * torch.floor(X / Lt)                                           # every point's image inside the box [0, L)
     Xw = torch.where(Xw >= Lt, Xw - Lt, Xw)                                     # a coordinate a rounding left AT the period
-    cid = self._cell_index(H)[live]
+    cid = self._cell_index(H)[live].long()      # int64: the parent map is int32, and the junction key a * nC + b overflows 2^31 above 46,340 cells (exp09's 554,500-body scene, 2026-11-19: 43 % of its bonds named a negative cell)
     H._adh_period = float(Lv[0])
     H._adh_box = Lv                                                             # every axis's period, for bond_springs' nearest image
 
@@ -184,8 +184,10 @@ def periodic_forward(self, H, mask=None):
     ia = torch.where(ci == a, i, j)
     tk, tp = key[touch], ia[touch]
     if tk.numel():                                                               # contact per key: the distinct points of the LOWER cell within bond_range, x spacing^2
-        codes = torch.unique(tk * n + tp)
-        uk, cnt = torch.unique(codes // n, return_counts=True)
+        # the distinct (key, point) pairs as pairs: the code key * n + point overflowed int64 at 554,500 cells and 21 million points (exp09, 2026-11-19);
+        # the same sorted keys and counts as before for every smaller scene
+        kp = torch.unique(torch.stack([tk, tp.to(tk.dtype)], 1), dim=0)
+        uk, cnt = torch.unique(kp[:, 0], return_counts=True)
         area_v = cnt.double() * (self.h ** 2)
     else:
         uk = torch.empty(0, dtype=torch.long, device=dev)

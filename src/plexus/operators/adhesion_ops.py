@@ -747,7 +747,7 @@ class JunctionContact(Structural):
         nC = int(C.state.shape[0])
         live = torch.nonzero(P.occ > 0.5).reshape(-1)
         X = P.get("pos")[live].detach().cpu().numpy().astype(np.float64)
-        cid = self._cell_index(H)[live].cpu().numpy()
+        cid = self._cell_index(H)[live].long().cpu().numpy()      # int64: the parent map is int32, and the junction key a * nC + b overflows 2^31 above 46,340 cells (exp09's 554,500-body scene, 2026-11-19: 43 % of its bonds named a negative cell)
         # ONE PARTNER PER POINT: its nearest point in ANOTHER cell, within bond_range + skin. All pairs within the reach
         # would include lattice diagonals (1.41 and 1.73 spacings apart at rest), loaded beyond r_eq while the
         # cells sit still; the nearest partner of a surface point of two touching cubes is one spacing away.

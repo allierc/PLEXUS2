@@ -1,5 +1,6 @@
-# The environment PLEXUS runs in (Linux, NVIDIA GPU, CUDA 12.8 wheels of PyTorch): the package versions of the environment the
-# exp09 and exp10 runs, their movies and the watcher were made and checked with on 2026-11-19.
+# The environment PLEXUS runs in (Linux, NVIDIA GPU, CUDA 12.8 wheels of PyTorch). The pins are the package versions of the
+# development environment where the watcher and the tests ran on 2026-11-19. The cluster runs and movies of exp09 and exp10 used
+# another environment (python 3.12.7, pyvista 0.44.2, vtk 9.3.1); the scenes run with either.
 #   conda env create -f envs/environment.linux.yaml
 #   conda activate plexus
 # A CUDA GPU is needed for the scenes of exp09 and exp10: their substep operators are NVIDIA Warp kernels and refuse the CPU.
