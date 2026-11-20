@@ -1,0 +1,4 @@
+- video name: 0028
+- description: The simulation shows a large collection of particles evolving over a period of 200 microseconds. As time progresses, the number of bonds between the particles increases significantly from 1,304 to 70,312. The spatial distribution of the particles remains relatively stable, maintaining a dense, rectangular block structure. The "affinity" matrix on the right remains constant, while the "bonds" matrix shows a growing diagonal pattern of connections.
+- objects: The primary objects are thousands of small, multi-colored particles arranged in a large rectangular slab. These particles are colored in various shades of red, blue, yellow, and green to represent different properties. A smaller inset shows a subset of 7,110 bodies, highlighting their intricate, interconnected network. The particles are connected by bonds, which are visualized as a growing network of links between neighboring bodies.
+

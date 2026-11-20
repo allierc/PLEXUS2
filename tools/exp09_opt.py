@@ -10,7 +10,7 @@ A scene is `rna1_3d` (the spec file as it is, read and never written) or one of 
     python tools/exp09_opt.py run <scene> <tag> --configs base,base2,cc [--frames 10]    each configuration in its own process; data/opt_<tag>.json: time per frame,
                                                                                         peak GPU memory, the final state against the FIRST configuration of the list
     python tools/exp09_opt.py health <scene> <tag> --configs base,... [--frames 200]     the same with the health measures sampled every 10 frames
-    python tools/exp09_opt.py build <scene>                                             a scaled scene's seed table and spec, into tmp/exp09_opt/
+    python tools/exp09_opt.py build <scene>                                             a scaled scene's spec into tmp/exp09_opt/ (its bodies packed when `generate` runs)
     python tools/exp09_opt.py one <scene> <config> <out.npz> [--frames N] [--health]     one configuration (the child process of run and health)
     python tools/exp09_opt.py write <scene> <config> <name>                             the scene under a configuration as config/tissue/exp09_land_opt_<name>.yaml
     python tools/exp09_opt.py generate <name>                                           Plexus_Main -o generate of that spec, the new operators imported first
@@ -54,8 +54,8 @@ SCENES = {
 }
 
 
-def build(scene):
-    """The seed table and the spec of a scaled scene, written to tmp/exp09_opt/ (E.DATA is pointed there while E.build runs: nothing is written into the record)."""
+def register(scene):
+    """One of SCENES as an iteration of tools/exp09_landscape.py (E.ITERS[scene]), so that E.params, E.build and E.packed_params know it."""
     f = float(SCENES[scene]["f"])
     parent = SCENES[scene].get("parent", "rna1_3d")
     base = E.params(parent)
@@ -65,6 +65,12 @@ def build(scene):
                           chains=[dict(ch, n=int(round(ch["n"] * f))) for ch in base["chains"]],
                           junction_buffer=int(2 ** math.ceil(math.log2(16384 * f))), section=None, panels3d=False,
                           seed_batched=f > 5.0)       # from_points_ragged_batched above about 50,000 bodies: the default seed costs bodies x points (26 minutes at 554,500)
+
+
+def build(scene):
+    """The spec of a scaled scene, written to tmp/exp09_opt/: its bodies packed when `generate` runs (seed_positions[packed]), packed here once for the cell set's counts
+    (E.DATA is pointed there while E.build runs: a scene that keeps a seed table writes it there, nothing into the record)."""
+    register(scene)
     os.makedirs(OPT, exist_ok=True)
     keep = E.DATA
     E.DATA = OPT
@@ -76,7 +82,8 @@ def build(scene):
         E.DATA = keep
     out = os.path.join(OPT, f"spec_{scene}.yaml")
     yaml.safe_dump(sp, open(out, "w"), sort_keys=False, width=1000)
-    print(f"built {scene}: {sp['sets']['cell']['n']:,} bodies, world {sp['general']['world']}, seed {sp['seed'][0]['points']} ({time.time() - t0:.0f} s) -> {os.path.relpath(out, ROOT)}", flush=True)
+    print(f"built {scene}: {sp['sets']['cell']['n']:,} bodies, world {sp['general']['world']}, seed {sp['seed'][0].get('points') or 'packed at generate'} ({time.time() - t0:.0f} s) "
+          f"-> {os.path.relpath(out, ROOT)}", flush=True)
 
 
 def scene_spec(scene):

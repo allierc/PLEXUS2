@@ -1,0 +1,1462 @@
+general:
+  name: exp09_land_s554k_movie
+  headline: 'exp09 opt_s554k: a crowded molecular landscape of 554,500 MPM bodies (14 % of a slab 3,410 x 1,920 x 192 nm)'
+  title: 'rna1_3d x 100: 554,500 bodies (2,300 strands of each mRNA type, 17,500 proteins of each type) in a box 3,410 x 1,920 x 192 nm'
+  seed: 1
+  n_frames: 1000
+  dt: 1.0
+  record_cap: 101
+  boundary: free
+  dim: 3
+  world:
+  - 342.2
+  - 193.2
+  - 20.4
+  units:
+    length_um: 0.01
+    time_s: 2.0e-07
+fields:
+  mpm_grid:
+    frame: mpm_grid
+    n_grid: 15
+    per_parent: cell
+    cell_box: 3.0
+sets:
+  cell:
+    n: 554500
+    type_layout: ordered
+    types:
+      m0:
+        count: 11500
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      p0:
+        count: 17500
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      m1:
+        count: 18400
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      p1:
+        count: 17500
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      m2:
+        count: 23000
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      p2:
+        count: 17500
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      m3:
+        count: 29900
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      p3:
+        count: 17500
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      m4:
+        count: 34500
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      p4:
+        count: 17500
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      m5:
+        count: 41400
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      p5:
+        count: 17500
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      m6:
+        count: 46000
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      p6:
+        count: 17500
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      m7:
+        count: 52900
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      p7:
+        count: 17500
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      m8:
+        count: 57500
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      p8:
+        count: 17500
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      m9:
+        count: 64400
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+      p9:
+        count: 17500
+        shape: ball
+        material: elastic
+        youngs: 20.0
+        density: 1.0
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: rate
+        record: false
+      bonded:
+        width: 1
+        record: false
+      adh:
+        width: 6
+        record: false
+      valence:
+        width: 1
+        record: false
+      site:
+        width: 1
+        record: false
+  pt:
+    entity: mpm_particle
+    parent: cell
+    per_parent: 64
+    density: 1.0
+    radius: 0.5
+    state:
+      pos:
+        width: 3
+        role: coordinate
+        integration: coordinate
+        boundary: world
+      vel:
+        width: 3
+        role: rate
+        integration: rate
+        record: false
+      pid:
+        width: 1
+      cellc:
+        width: 1
+        record: false
+      face:
+        width: 1
+        record: false
+  junction:
+    n: 0
+    buffer: 2097152
+    state:
+      ca:
+        width: 1
+        integration: none
+      cb:
+        width: 1
+        integration: none
+      fg:
+        width: 1
+        integration: none
+        record: false
+      rho:
+        width: 1
+        integration: first_order
+      area:
+        width: 1
+        integration: none
+      load:
+        width: 1
+        integration: none
+operators:
+- op: thermal_bath
+  at: pt
+  friction: 0.0125
+  kT: 2.5e-05
+  substep_dt: 0.01
+  seed: 1
+  implementation: langevin_warp
+- op: active_force
+  at: pt
+  wall_stiffness: 400.0
+  lo:
+  - 0.6
+  - 0.6
+  - 0.6
+  hi:
+  - 341.6
+  - 192.6
+  - 19.8
+  model: box_slab_warp
+- op: pair_potential
+  at: pt
+  cells: cell
+  repulsion_strength: 600.0
+  contact_slack: 0.2
+  contact_surface_tension:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  contact_edge_width: 0.2
+  implementation: cell_contact_warp_pp_fixed
+- op: apical_junction
+  at: pt
+  cells: cell
+  k: 4.0
+  reach: 0.24
+  shell: 1000000000.0
+  skip_block: bonded
+  implementation: warp
+- op: contact_finder
+  at: junction
+  points: pt
+  cells: cell
+  spacing: 0.2
+  bond_range: 0.45
+  site_block: site
+  implementation: sites_wide
+- op: bond_binding
+  at: junction
+  cells: cell
+  binding_rate: 1.0
+  unbinding_rate: 0.005
+  bond_strength: 0.01
+  bell: area
+  min_area: 0.12
+  type_matrix:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.44
+    - 0.0
+    - 0.59
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.83
+    - 0.5
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.68
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.7
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.96
+    - 0.5
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.5
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.59
+    - 0.0
+    - 0.95
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.96
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.73
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.5
+    - 0.0
+    - 0.0
+    - 0.66
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.77
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.83
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.44
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.66
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.47
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.95
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.45
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.43
+    - 0.0
+  - - 0.0
+    - 0.59
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.95
+    - 0.0
+    - 0.72
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.91
+    - 0.0
+    - 0.9
+    - 0.0
+    - 0.9
+    - 0.0
+    - 0.66
+  - - 0.0
+    - 0.0
+    - 0.68
+    - 0.5
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.72
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.97
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.77
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.7
+    - 0.0
+    - 0.46
+    - 0.0
+    - 0.7
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.47
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.73
+    - 0.0
+    - 0.5
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.45
+    - 0.0
+    - 0.97
+    - 0.0
+    - 0.73
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.91
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.91
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.67
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.59
+    - 0.0
+    - 0.83
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.5
+    - 0.0
+    - 0.91
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.73
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.9
+    - 0.0
+    - 0.7
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.95
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.44
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.9
+    - 0.0
+    - 0.46
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.44
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.83
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.43
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.67
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.5
+    - 0.7
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.66
+    - 0.0
+    - 0.7
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  implementation: valence
+  valence_block: valence
+- op: bond_springs
+  at: pt
+  junctions: junction
+  bond_stiffness: 0.001
+  bond_damping: 0.0
+  spacing: 0.2
+  bond_rest_length: 0.22
+  bond_range: 0.45
+  implementation: warp
+- op: mpm_strain
+  at: pt
+  implementation: warp
+- op: mpm_scatter
+  at: mpm_grid
+  from: pt
+  drag: 0.0
+  implementation: warp_pp_lean
+- op: mpm_grid_update
+  at: mpm_grid
+  implementation: solved_in_gather
+- op: mpm_gather
+  at: pt
+  from: mpm_grid
+  implementation: warp_pp_solve
+- op: aggregate_centroid
+  at: cell
+  child: pt
+schedule:
+- contact_finder
+- bond_binding
+- pair_potential
+- bond_springs
+- steps:
+  - thermal_bath
+  - active_force
+  - pair_potential
+  - bond_springs
+  - apical_junction
+  - mpm_strain
+  - mpm_scatter
+  - mpm_grid_update
+  - mpm_gather
+  substep_dt: 0.01
+  capture: false
+- aggregate_centroid
+seed:
+- op: seed_positions
+  model: packed
+  at: pt
+  cell_set: cell
+  um_per_unit: 0.01
+  centre_um:
+  - 0.0
+  - 0.0
+  - 0.0
+  centre:
+  - 0.0
+  - 0.0
+  - 0.0
+  value_block: bonded
+  kinds:
+  - name: m0
+    points: 27
+    shape:
+    - block
+    - - 3
+      - 3
+      - 3
+  - name: p0
+    points: 64
+    shape:
+    - ellipsoid
+    - - 1.0
+      - 1.0
+      - 1.0
+  - name: m1
+    points: 27
+    shape:
+    - block
+    - - 3
+      - 3
+      - 3
+  - name: p1
+    points: 64
+    shape:
+    - lobes
+    - - - - 0.0
+          - 0.0
+          - 0.66
+        - 1.0
+      - - - 0.0
+          - 0.0
+          - -0.66
+        - 1.0
+  - name: m2
+    points: 27
+    shape:
+    - block
+    - - 3
+      - 3
+      - 3
+  - name: p2
+    points: 64
+    shape:
+    - lobes
+    - - - - 0.75
+          - 0.0
+          - 0.0
+        - 1.0
+      - - - -0.375
+          - 0.65
+          - 0.0
+        - 1.0
+      - - - -0.375
+          - -0.65
+          - 0.0
+        - 1.0
+  - name: m3
+    points: 27
+    shape:
+    - block
+    - - 3
+      - 3
+      - 3
+  - name: p3
+    points: 64
+    shape:
+    - lobes
+    - - - - 0.62
+          - 0.62
+          - 0.62
+        - 1.0
+      - - - 0.62
+          - -0.62
+          - -0.62
+        - 1.0
+      - - - -0.62
+          - 0.62
+          - -0.62
+        - 1.0
+      - - - -0.62
+          - -0.62
+          - 0.62
+        - 1.0
+  - name: m4
+    points: 27
+    shape:
+    - block
+    - - 3
+      - 3
+      - 3
+  - name: p4
+    points: 64
+    shape:
+    - lobes
+    - - - - 0.0
+          - 0.0
+          - 0.0
+        - 1.0
+      - - - 0.0
+          - 0.0
+          - 1.25
+        - 0.6
+  - name: m5
+    points: 27
+    shape:
+    - block
+    - - 3
+      - 3
+      - 3
+  - name: p5
+    points: 64
+    shape:
+    - lobes
+    - - - - 0.0
+          - -0.9
+          - 0.0
+        - 0.8
+      - - - 0.0
+          - 0.0
+          - 0.0
+        - 0.8
+      - - - 0.8
+          - 0.9
+          - 0.0
+        - 0.8
+      - - - -0.8
+          - 0.9
+          - 0.0
+        - 0.8
+  - name: m6
+    points: 27
+    shape:
+    - block
+    - - 3
+      - 3
+      - 3
+  - name: p6
+    points: 64
+    shape:
+    - lobes
+    - - - - -1.45
+          - 0.55
+          - 0.0
+        - 0.8
+      - - - -0.52
+          - 0.0
+          - 0.0
+        - 0.9
+      - - - 0.52
+          - 0.0
+          - 0.0
+        - 0.9
+      - - - 1.45
+          - 0.55
+          - 0.0
+        - 0.8
+  - name: m7
+    points: 27
+    shape:
+    - block
+    - - 3
+      - 3
+      - 3
+  - name: p7
+    points: 64
+    shape:
+    - lobes
+    - - - - 0.0
+          - 0.0
+          - 0.0
+        - 1.0
+      - - - 0.0
+          - 0.0
+          - 1.05
+        - 0.78
+  - name: m8
+    points: 27
+    shape:
+    - block
+    - - 3
+      - 3
+      - 3
+  - name: p8
+    points: 64
+    shape:
+    - ellipsoid
+    - - 1.0
+      - 0.6
+      - 0.6
+  - name: m9
+    points: 27
+    shape:
+    - block
+    - - 3
+      - 3
+      - 3
+  - name: p9
+    points: 64
+    shape:
+    - ellipsoid
+    - - 1.0
+      - 1.0
+      - 0.45
+  counts:
+    p0: 17500
+    p1: 17500
+    p2: 17500
+    p3: 17500
+    p4: 17500
+    p5: 17500
+    p6: 17500
+    p7: 17500
+    p8: 17500
+    p9: 17500
+  chains:
+  - kind: m9
+    n: 2300
+    m: 28
+    bend: 0.2
+  - kind: m8
+    n: 2300
+    m: 25
+    bend: 0.2
+  - kind: m7
+    n: 2300
+    m: 23
+    bend: 0.2
+  - kind: m6
+    n: 2300
+    m: 20
+    bend: 0.2
+  - kind: m5
+    n: 2300
+    m: 18
+    bend: 0.2
+  - kind: m4
+    n: 2300
+    m: 15
+    bend: 0.2
+  - kind: m3
+    n: 2300
+    m: 13
+    bend: 0.2
+  - kind: m2
+    n: 2300
+    m: 10
+    bend: 0.2
+  - kind: m1
+    n: 2300
+    m: 8
+    bend: 0.2
+  - kind: m0
+    n: 2300
+    m: 5
+    bend: 0.2
+  box:
+  - - 0.6
+    - 0.6
+    - 0.6
+  - - 341.6
+    - 192.6
+    - 19.8
+  gap: 0.3
+  seed: 1
+  slots: 64
+  spacing: 0.2
+  columns:
+    valence:
+      m0: 1
+      m1: 1
+      m2: 1
+      m3: 1
+      m4: 1
+      m5: 1
+      m6: 1
+      m7: 1
+      m8: 1
+      m9: 1
+      p0: 2
+      p1: 2
+      p2: 2
+      p3: 2
+      p4: 2
+      p5: 2
+      p6: 2
+      p7: 2
+      p8: 2
+      p9: 2
+  sites: 2
+plotting:
+  renderer: vtk_points
+  subject: pt
+  render_3d: contour
+  point_volume: 0.008000000000000002
+  cell_colours: type
+  colors:
+    m0: '#E63946'
+    p0: '#4D96FF'
+    m1: '#F3722C'
+    p1: '#00BBF9'
+    m2: '#F8961E'
+    p2: '#43AA8B'
+    m3: '#F9C74F'
+    p3: '#2A9D8F'
+    m4: '#D62828'
+    p4: '#90BE6D'
+    m5: '#FF6B6B'
+    p5: '#577590'
+    m6: '#C9184A'
+    p6: '#9B5DE5'
+    m7: '#FFB703'
+    p7: '#4361EE'
+    m8: '#E76F51'
+    p8: '#06D6A0'
+    m9: '#F4A3A8'
+    p9: '#118AB2'
+  surface_opacity: 1.0
+  background: '#8d99a6'
+  foreground: white
+  box_frame: false
+  camera:
+    elev: 90
+    azim: -90
+  zoom: 1.0
+  duration_s: 10
+  slow_motion: 1
+  bond_lines: true

@@ -4,7 +4,7 @@ the look is inspired by D. Goodsell's cell cross-sections, https://ccsb.scripps.
 
     python tools/exp09_landscape.py list
     python tools/exp09_landscape.py write it01                # -> config/tissue/exp09_land_it01.yaml; `generate` packs its bodies (seed_positions[packed]); a scene with a
-                                                              #    membrane, a vesicle, a coarse lattice, seed_from, the rps signal or scale_to also gets its seed table in data/
+                                                              #    membrane, a vesicle, a coarse lattice, seed_from or the rps signal also gets its seed table in data/
     python tools/exp09_landscape.py measure it01              # the run's numbers, printed and saved in the record's data/
     python tools/exp09_landscape.py after it01                # what the after-job runs: measure, why text, the movie into the record
     python tools/exp09_landscape.py render it01 [--last-only] # the movie (or only the last stored row as a PNG) of a run or of a partial trajectory
@@ -672,7 +672,7 @@ def run_name(key):
 
 # ---- the bodies' points and their packing --------------------------------------------------------------------------------------------------------------------------
 # body_points, chain_pieces, pack, table_of: the one copy is the seed operator's (seed_positions[packed] packs a scene's bodies at generate time from the
-# spec, 2026-11-20); this tool still uses them for the scenes whose table it writes (membranes, vesicles, coarse scenes, seed_from, the rps signal, scaled scenes)
+# spec, 2026-11-20); this tool still uses them for the scenes whose table it writes (membranes, vesicles, coarse scenes, seed_from, the rps signal) and for big_first
 from plexus.operators.seed_packed_ops import body_points, chain_pieces, pack, table_of  # noqa: E402
 
 
@@ -811,9 +811,9 @@ def _site_args(p):
 
 def packable(p):
     """True when the bodies of a scene are packed by seed_positions[packed] when `generate` runs (no seed table on disk): a scene of bodies placed at random and
-    chains. A scene with a membrane, a vesicle, a coarse lattice, groups taken from another run (seed_from), the rps signal's starting levels or `scale_to` (its
-    table's `kind` column feeds big_first) keeps its table."""
-    return not any(p.get(t) for t in ("membrane", "vesicle", "coarse", "seed_from", "scale_to", "region")) and (p.get("signal") or {}).get("model") != "rps"
+    chains, scaled or not (`scale_to`: the counts are scaled before they reach the spec; big_first writes the scaled scene's table, with its `kind` column, for itself).
+    A scene with a membrane, a vesicle, a coarse lattice, groups taken from another run (seed_from) or the rps signal's starting levels keeps its table."""
+    return not any(p.get(t) for t in ("membrane", "vesicle", "coarse", "seed_from", "region")) and (p.get("signal") or {}).get("model") != "rps"
 
 
 def _plain(v):
@@ -825,10 +825,9 @@ def _plain(v):
     return v.item() if isinstance(v, np.generic) else v
 
 
-def packed_seed(key):
-    """seed_positions[packed]'s own parameters for `key` (the kinds with their points and shapes, the counts, the chains, the box, the gap, the seed, the slots, the
-    columns), and what that packing places, run here once to write the cell set's counts: (parameters, {kind: bodies}, the bodies' share of the box's volume)."""
-    from plexus.operators.seed_packed_ops import SeedPacked
+def packed_params(key):
+    """seed_positions[packed]'s own parameters for `key`: the kinds with their points and shapes, the counts, the chains, the box, the gap, the seed, the slots, the
+    columns (nothing is packed here)."""
     p = params(key)
     m = float(p["margin"])
     lo, hi = np.full(3, m), np.full(3, m) + np.asarray(p["box"], float)
@@ -841,6 +840,14 @@ def packed_seed(key):
           **({"unbonded": list(p["unbonded"])} if p.get("unbonded") else {}),
           **({"columns": {c: per for c, per in _columns(p).items() if per}} if any(_columns(p).values()) else {}),
           **({"sites": int(site["sites_k"])} if site["sites_k"] else {}), **({"molecule": True} if site["molecule"] else {})}
+    return op
+
+
+def packed_seed(key):
+    """packed_params of `key` and what that packing places, run here once to write the cell set's counts: (parameters, {kind: bodies}, the bodies' share of the box's
+    volume)."""
+    from plexus.operators.seed_packed_ops import SeedPacked
+    p, op = params(key), packed_params(key)
     names, got, t = SeedPacked(dict(op, cell_set="cell", um_per_unit=UM)).packed()
     share = int(np.isfinite(t["pos"][:, :, 0]).sum()) * PV / float(np.prod(p["box"]))
     return op, got, share

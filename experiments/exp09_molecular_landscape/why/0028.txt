@@ -1,0 +1,4 @@
+time   2026-11-19 22:55:18
+run    tissue/exp09_land_s554k_movie (mpm; drawn from the bodies' centres and, in the window, their points: tools/exp09_landscape.py render_chunk)
+drawn  101 of 101 stored rows, frame 0 to 1000
+why    THE 554,500-BODY TWIN OF STEP 25 (Cedric: "run the movie"): rna1_3d x 100 in a walled box 3,410 x 1,920 x 192 nm (2,300 strands of each mRNA kind, 17,500 of each protein kind, 21.4 million material points), 1,000 frames on one GPU with the fastest operator set measured at this size; the first run of more than 46,340 bodies with correct bonds (the contact finders' two integer overflows fixed the same day). Drawn whole in 3D, the bodies of a 384 x 216 nm window at its centre zoomed at top right, the bonds per pair of kinds at right. Do the mRNA and the proteins bind as in step 25 when the crowd is 100 times larger

@@ -347,10 +347,9 @@ schedule:
 - aggregate_centroid
 seed:
 - op: seed_positions
-  model: from_points_ragged
+  model: packed
   at: pt
   cell_set: cell
-  points: experiments/exp09_molecular_landscape/data/seed_a100k.npz
   um_per_unit: 0.01
   centre_um:
   - 0.0
@@ -360,6 +359,111 @@ seed:
   - 0.0
   - 0.0
   - 0.0
+  kinds:
+  - name: trimer
+    points: 125
+    shape:
+    - lobes
+    - - - - 0.75
+          - 0.0
+          - 0.0
+        - 1.0
+      - - - -0.375
+          - 0.65
+          - 0.0
+        - 1.0
+      - - - -0.375
+          - -0.65
+          - 0.0
+        - 1.0
+  - name: enzyme
+    points: 64
+    shape:
+    - ellipsoid
+    - - 1.0
+      - 1.0
+      - 1.0
+  - name: small
+    points: 27
+    shape:
+    - ellipsoid
+    - - 1.0
+      - 1.0
+      - 1.0
+  - name: clover
+    points: 125
+    shape:
+    - lobes
+    - - - - 0.62
+          - 0.62
+          - 0.62
+        - 1.0
+      - - - 0.62
+          - -0.62
+          - -0.62
+        - 1.0
+      - - - -0.62
+          - 0.62
+          - -0.62
+        - 1.0
+      - - - -0.62
+          - -0.62
+          - 0.62
+        - 1.0
+  - name: dimer
+    points: 64
+    shape:
+    - lobes
+    - - - - 0.0
+          - 0.0
+          - 0.66
+        - 1.0
+      - - - 0.0
+          - 0.0
+          - -0.66
+        - 1.0
+  - name: pear
+    points: 64
+    shape:
+    - lobes
+    - - - - 0.0
+          - 0.0
+          - 0.0
+        - 1.0
+      - - - 0.0
+          - 0.0
+          - 1.25
+        - 0.6
+  - name: ring
+    points: 133
+    shape:
+    - torus
+    - - 2.0
+      - 1.0
+  counts:
+    pear: 10526
+    clover: 10526
+    trimer: 10526
+    dimer: 15790
+    ring: 5263
+    enzyme: 15790
+    small: 31579
+  box:
+  - - 0.6
+    - 0.6
+    - 0.6
+  - - 312.06512857106406
+    - 175.79913482122353
+    - 5.8
+  gap: 0.3
+  seed: 1
+  slots: 133
+  spacing: 0.2
+  columns:
+    valence:
+      dimer: 2
+      trimer: 3
+      clover: 4
 plotting:
   renderer: vtk_points
   subject: pt
