@@ -3,7 +3,8 @@ paler -- with every molecule a body of MPM material points (Cedric, 2026-11-14: 
 the look is inspired by D. Goodsell's cell cross-sections, https://ccsb.scripps.edu/goodsell/, and is not a copy of them: Cedric's own vivid palette, a grey ground).
 
     python tools/exp09_landscape.py list
-    python tools/exp09_landscape.py write it01                # -> config/tissue/exp09_land_it01.yaml (+ its seed table in the record's data/)
+    python tools/exp09_landscape.py write it01                # -> config/tissue/exp09_land_it01.yaml; `generate` packs its bodies (seed_positions[packed]); a scene with a
+                                                              #    membrane, a vesicle, a coarse lattice, seed_from, the rps signal or scale_to also gets its seed table in data/
     python tools/exp09_landscape.py measure it01              # the run's numbers, printed and saved in the record's data/
     python tools/exp09_landscape.py after it01                # what the after-job runs: measure, why text, the movie into the record
     python tools/exp09_landscape.py render it01 [--last-only] # the movie (or only the last stored row as a PNG) of a run or of a partial trajectory
@@ -670,47 +671,9 @@ def run_name(key):
 
 
 # ---- the bodies' points and their packing --------------------------------------------------------------------------------------------------------------------------
-def body_points(shape, n, spacing=SPACING):
-    """[n, 3] points of one body about its own centroid, length units: the `n` points of a lattice of spacing `spacing` (SPACING, 2 nm) with the lowest score of the
-    shape (see SPECIES)."""
-    kind, par = shape
-    PV = spacing ** 3                                                                              # this lattice's point volume (shadows the module's, for a coarse body)
-    g = np.arange(-9, 10) * spacing
-    lat = np.stack(np.meshgrid(g, g, g, indexing="ij"), -1).reshape(-1, 3)
-    if kind == "ellipsoid":
-        score = np.linalg.norm(lat / np.asarray(par, float)[None], axis=1)
-    elif kind in ("lobes", "lobes_wide"):                                                          # lobes_wide: the same on a lattice as wide as the lobes reach (a body over 19 points long; exp10's Tudor)
-        cen = np.array([c for c, _ in par], float)
-        rad = np.array([r for _, r in par], float)
-        cen = cen - (cen * rad[:, None] ** 3).sum(0) / (rad ** 3).sum()                         # the lobes' volume-weighted centre at the lattice's origin
-        s = (n * PV / (4.0 / 3.0 * np.pi * (rad ** 3).sum())) ** (1.0 / 3.0)                    # the first lobe's radius if the lobes did not overlap; they do, so the n points fill them a little further out
-        if kind == "lobes_wide":
-            half = int(np.ceil(float((np.abs(s * cen) + s * rad[:, None]).max()) / spacing)) + 2
-            g = np.arange(-half, half + 1) * spacing
-            lat = np.stack(np.meshgrid(g, g, g, indexing="ij"), -1).reshape(-1, 3)
-        score = (np.linalg.norm(lat[:, None] - s * cen[None], axis=2) / (s * rad[None])).min(1)
-    elif kind == "torus":
-        R, r = (float(v) for v in par)
-        s = (n * PV / (2.0 * np.pi ** 2 * R * r * r)) ** (1.0 / 3.0)                               # the tube radius at which the ring's volume 2 pi^2 R r^2 holds the n points
-        score = np.hypot(np.hypot(lat[:, 0], lat[:, 1]) - s * R, lat[:, 2]) / (s * r)
-    elif kind == "stack":
-        g = np.arange(-5, 6)
-        ij = np.stack(np.meshgrid(g, g, indexing="ij"), -1).reshape(-1, 2)
-        P = np.concatenate([np.column_stack([q[:, 0] * SPACING, np.full(len(q), -k * SPACING), q[:, 1] * SPACING])
-                            for k, rho in enumerate(par) for q in [ij[(ij ** 2).sum(1) <= float(rho) ** 2 + 1e-9]]])
-        if len(P) != n:
-            raise ValueError(f"a stack of {par} has {len(P)} points, not {n}")
-        return P - P.mean(0)
-    elif kind == "block":                                                                          # a full lattice block of nx x ny x nz points
-        ax = [(np.arange(k) - 0.5 * (k - 1)) * SPACING for k in par]
-        P = np.stack(np.meshgrid(*ax, indexing="ij"), -1).reshape(-1, 3)
-        if len(P) != n:
-            raise ValueError(f"a block of {par} points has {len(P)} points, not {n}")
-        return P
-    else:
-        raise ValueError(f"unknown shape {kind!r}")
-    P = lat[np.argsort(score, kind="stable")[:n]]
-    return P - P.mean(0)
+# body_points, chain_pieces, pack, table_of: the one copy is the seed operator's (seed_positions[packed] packs a scene's bodies at generate time from the
+# spec, 2026-11-20); this tool still uses them for the scenes whose table it writes (membranes, vesicles, coarse scenes, seed_from, the rps signal, scaled scenes)
+from plexus.operators.seed_packed_ops import body_points, chain_pieces, pack, table_of  # noqa: E402
 
 
 def membrane_bodies(mem, lo, hi):
@@ -781,170 +744,6 @@ def vesicle_bodies(ves, lo, hi):
     return out
 
 
-def _riders(grp, ch):
-    """`ch['riders']` = dict(kind, every): a body of species `kind` seated on one subunit in `every` of the row `grp`, on alternate sides in the row's plane, its
-    lowest layer of points one spacing from the subunit's outer layer and on the subunit's own lattice, so that `bonds` ties the two (a ribosome on a thread: the
-    pair then moves as one). A rider that would come within 0.7 of a spacing of another body of the row is left out. Returns the row with its riders appended."""
-    rd = ch.get("riders")
-    if not rd:
-        return grp
-    dims = SPECIES[ch["kind"]]["shape"][1]
-    Q0 = body_points(SPECIES[rd["kind"]]["shape"], SPECIES[rd["kind"]]["n"])
-    cen = np.array([P.mean(0) for _, P in grp])
-    out, side = list(grp), 1.0
-    for k in range(int(rd["every"]) // 2, len(grp), int(rd["every"])):
-        t = cen[min(k + 1, len(grp) - 1)] - cen[max(k - 1, 0)]
-        t = t / np.linalg.norm(t)
-        nrm = side * np.array([-t[1], t[0], 0.0])
-        Q = Q0.copy()
-        for ax, nd in ((0, dims[0]), (2, dims[2])):                    # along the row and along z: on the subunit's lattice (its points sit at multiples of the spacing, or half-way for an even count)
-            want = 0.0 if nd % 2 else 0.5 * SPACING
-            Q[:, ax] += want - (Q[0, ax] - round((Q[0, ax] - want) / SPACING) * SPACING)
-        Q[:, 1] += 0.5 * (dims[1] - 1) * SPACING + SPACING - Q[:, 1].min()          # its lowest layer one spacing outside the subunit's outer layer
-        X = cen[k] + Q[:, :1] * t + Q[:, 1:2] * nrm + Q[:, 2:3] * np.array([0.0, 0.0, 1.0])
-        others = np.concatenate([P for j, (_, P) in enumerate(out) if j != k])
-        if np.linalg.norm(X[:, None] - others[None], axis=2).min() < 0.7 * SPACING:          # 0.7: on a turning thread the next element's corner is already 0.17 from its neighbour
-            continue
-        out.append((rd["kind"], X))
-        side = -side
-    return out
-
-
-def chain_groups(chains, seed):
-    """Chains of bodies for `pack` to place, each as one rigid piece: for every dict(kind, n, m, bend) of `chains`, `n` rows of `m` bodies of the block species `kind`,
-    each one lattice spacing from the next, so a row is continuous material cut into bodies (what holds it afterwards is the contact tension kind-kind alone).
-    `bend` 0 (the default): a straight row along x on ONE lattice -- a stiff filament. `bend` > 0: a meander -- from one subunit to the next the row's heading in the
-    xy plane turns by a random angle of standard deviation `bend`, radians (cut at 1.5 x bend), each subunit turned to face along the row, and the step widened by half
-    a point spacing x that angle: at the largest turn of bend 0.2 (0.3 rad) the two facing layers of points are 0.17 apart on the inside of the turn and 0.29 on the
-    outside (0.2 on a straight row). A wider step leaves the outside out of contact: the smoke of 2026-11-15 07:25 widened by half a block's width x the angle and one
-    bond of 145 never closed. A row that comes back within a block and a half of itself is drawn again, and so is one taller than 0.8 of its `band`; the row is returned turned
-    so that it runs along x from its first subunit to its last. Returns [[(species, points)]]."""
-    rng = np.random.default_rng(int(seed) + 7919)
-    out = []
-    for ch in chains:
-        kind, m, bend = ch["kind"], int(ch["m"]), float(ch.get("bend") or 0.0)
-        sub = body_points(SPECIES[kind]["shape"], SPECIES[kind]["n"])
-        w = SPECIES[kind]["shape"][1][0] * SPACING
-        for _ in range(int(ch["n"])):
-            if bend <= 0.0:
-                out.append(_riders([(kind, sub + np.array([(k - 0.5 * (m - 1)) * w, 0.0, 0.0])) for k in range(m)], ch))
-                continue
-            for _try in range(3000):
-                phi, c, grp = rng.uniform(-0.5, 0.5) * bend * math.sqrt(m), np.zeros(3), []
-                for k in range(m):
-                    if k:
-                        d = float(np.clip(rng.normal(0.0, bend), -1.5 * bend, 1.5 * bend))
-                        step = w + 0.5 * SPACING * abs(d)
-                        c = c + 0.5 * step * np.array([math.cos(phi), math.sin(phi), 0.0])
-                        phi += d
-                        c = c + 0.5 * step * np.array([math.cos(phi), math.sin(phi), 0.0])
-                    R = np.array([[math.cos(phi), -math.sin(phi), 0.0], [math.sin(phi), math.cos(phi), 0.0], [0.0, 0.0, 1.0]])
-                    grp.append((kind, c + sub @ R.T))
-                cen = np.array([P.mean(0) for _, P in grp])
-                far = np.abs(np.arange(m)[:, None] - np.arange(m)[None]) >= 3                      # two subunits at least three apart along the row
-                if (np.linalg.norm(cen[:, None] - cen[None], axis=2)[far] < 1.5 * w).any():        # ... closer than a block and a half: the row has come back on itself
-                    continue                                                                       # (until 2026-11-15 08:30 this compared subunits two apart with 1.34 and never passed: it10's threads are the last of 200 draws)
-                a = -math.atan2(cen[-1, 1] - cen[0, 1], cen[-1, 0] - cen[0, 0])                   # turned so that the row runs along x from its first subunit to its last
-                T = np.array([[math.cos(a), -math.sin(a), 0.0], [math.sin(a), math.cos(a), 0.0], [0.0, 0.0, 1.0]])
-                grp = [(nm, P @ T.T) for nm, P in grp]
-                if ch.get("band") and np.ptp(np.concatenate([P for _, P in grp])[:, 1]) + 2.0 * SPACING > 0.8 * (float(ch["band"][1]) - float(ch["band"][0])):
-                    continue                                                                       # a meander that could not lie inside its band: drawn again
-                break
-            else:
-                raise ValueError(f"chain_groups: no meander of {m} `{kind}` at bend {bend} fits {ch.get('band') or 'clear of itself'} in 3,000 draws; lower `bend` or `m`")
-            grp = _riders(grp, ch)
-            mid = np.concatenate([P for _, P in grp]).mean(0)
-            out.append([(nm, P - mid) for nm, P in grp])
-    return out
-
-
-def _rotation(rng):
-    """A rotation matrix drawn uniformly over all rotations (a uniform unit quaternion)."""
-    w, x, y, z = (lambda q: q / np.linalg.norm(q))(rng.normal(size=4))
-    return np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
-                     [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
-                     [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
-
-
-def pack(counts, lo, hi, gap, seed, tries=4000, fixed=(), yrange=None, groups=(), where=None, group_band=None, group_tilt=None, shapes=None, spacing=SPACING):
-    """Random sequential placement: every body at a random place and orientation inside the box [lo, hi], largest first, kept when none of its points is within `gap`
-    of a point already placed (tested on a 1 nm occupancy lattice). `fixed`: bodies placed beforehand as given (a membrane); `yrange`: {species: (y_lo, y_hi)}, the
-    part of the box that species may lie in; `where`: {species: rule(centre, half extents) -> bool}, a further rule on where a body of that species may sit (inside
-    or outside a vesicle); `groups`: chains of bodies placed after the fixed ones, each as ONE rigid piece turned about z by a random angle (filaments and threads, lying in the
-    slab's plane), inside its species' `yrange` or, when `group_band[i]` = (y0, y1) is given for chain i, between those two heights above the box's floor; with `group_tilt[i]`
-    the random angle is within that many radians of the x axis (either way round) instead of anywhere in the turn.
-    Returns ([(species, points [n, 3] world)], {species: bodies that found no place}, how many of the bodies are fixed ones or chain subunits: the first of the list)."""
-    rng = np.random.default_rng(seed)
-    lo, hi = np.asarray(lo, float), np.asarray(hi, float)
-    h = 0.1
-    shape = np.ceil((hi - lo) / h).astype(int) + 1
-    taken = np.zeros(shape, bool)
-    r = int(math.ceil(gap / h))
-    o = np.arange(-r, r + 1)
-    off = np.stack(np.meshgrid(o, o, o, indexing="ij"), -1).reshape(-1, 3)
-    off = off[np.linalg.norm(off, axis=1) * h <= gap + 1e-9]
-    bp = shapes or {name: body_points(SPECIES[name]["shape"], SPECIES[name]["n"]) for name in counts}             # the same for every body of a species: drawn once
-    todo = [(name, bp[name]) for name, c in counts.items() for _ in range(int(c))]
-    order = sorted(range(len(todo)), key=lambda i: (-len(todo[i][1]), rng.random()))
-    placed, failed = [], {}
-    for name, X in fixed:
-        st = np.clip((np.floor((X - lo) / h).astype(int)[:, None, :] + off[None]).reshape(-1, 3), 0, shape - 1)
-        taken[st[:, 0], st[:, 1], st[:, 2]] = True
-        placed.append((name, X))
-    for gi, grp in enumerate(groups):
-        glo, ghi = lo.copy(), hi.copy()
-        if group_band and group_band[gi]:
-            glo[1], ghi[1] = lo[1] + float(group_band[gi][0]), lo[1] + float(group_band[gi][1])
-        elif yrange and grp[0][0] in yrange:
-            glo[1], ghi[1] = max(lo[1], yrange[grp[0][0]][0]), min(hi[1], yrange[grp[0][0]][1])
-        P0 = np.concatenate([P for _, P in grp])
-        cuts = np.cumsum([len(P) for _, P in grp])[:-1]
-        for _ in range(tries):
-            ang = rng.uniform(0.0, 2.0 * math.pi) if not (group_tilt and group_tilt[gi] is not None) else rng.uniform(-1.0, 1.0) * float(group_tilt[gi]) + math.pi * int(rng.integers(2))
-            P = P0 @ np.array([[math.cos(ang), -math.sin(ang), 0.0], [math.sin(ang), math.cos(ang), 0.0], [0.0, 0.0, 1.0]]).T
-            e = np.abs(P).max(0) + 0.5 * spacing
-            if np.any(ghi - e <= glo + e):
-                continue
-            c = rng.uniform(glo + e, ghi - e)
-            if where and grp[0][0] in where and not where[grp[0][0]](c, e):
-                continue
-            X = c + P
-            ijk = np.floor((X - lo) / h).astype(int)
-            if taken[ijk[:, 0], ijk[:, 1], ijk[:, 2]].any():
-                continue
-            st = np.clip((ijk[:, None, :] + off[None]).reshape(-1, 3), 0, shape - 1)
-            taken[st[:, 0], st[:, 1], st[:, 2]] = True
-            placed += [(nm, Xk) for (nm, _), Xk in zip(grp, np.split(X, cuts))]
-            break
-        else:
-            failed[grp[0][0] + " chain"] = failed.get(grp[0][0] + " chain", 0) + 1
-    n_struct = len(placed)                                                                         # the membrane's bodies and the chains' subunits: what `bonds` may tie
-    for i in order:
-        name, P0 = todo[i]
-        blo, bhi = lo.copy(), hi.copy()
-        if yrange and name in yrange:
-            blo[1], bhi[1] = max(lo[1], yrange[name][0]), min(hi[1], yrange[name][1])
-        for _ in range(tries):
-            P = P0 @ _rotation(rng).T
-            e = np.abs(P).max(0) + 0.5 * spacing
-            if np.any(bhi - e <= blo + e):
-                continue
-            c = rng.uniform(blo + e, bhi - e)
-            if where and name in where and not where[name](c, e):
-                continue
-            X = c + P
-            ijk = np.floor((X - lo) / h).astype(int)
-            if taken[ijk[:, 0], ijk[:, 1], ijk[:, 2]].any():
-                continue
-            st = np.clip((ijk[:, None, :] + off[None]).reshape(-1, 3), 0, shape - 1)
-            taken[st[:, 0], st[:, 1], st[:, 2]] = True
-            placed.append((name, X))
-            break
-        else:
-            failed[name] = failed.get(name, 0) + 1
-    return placed, failed, n_struct
-
-
 RPS_COLOURS = ("#5B2A86", "#21908C", "#FDE725")          # the three competitors: purple, teal, yellow (Cedric's choice for three chemicals, exp05, 2026-11-15: not red, green, blue)
 
 
@@ -983,55 +782,68 @@ def seed_table(key):
         inside = lambda c, e: math.hypot(c[0] - cx, c[1] - cy) + max(e[0], e[1]) <= float(v["r"]) - half
         outside = lambda c, e: (math.hypot(c[0] - cx, c[1] - cy) - max(e[0], e[1]) >= float(v["r"]) + half) or abs(c[0] - cx) - e[0] >= float(v["r"]) + half       # a chain beside the ring: its box is clear of it in x
         where = {nm: (inside if region.get(nm) == "lumen" else outside) for nm in list(p["counts"]) + [c["kind"] for c in (p.get("chains") or [])]}
-    if p.get("chains"):
-        for ch in p["chains"]:                                             # a chain with `rows`: straight along x, centred in x, one at each (height above the floor, depth)
-            for (y, zz), grp in zip(ch.get("rows") or [], chain_groups([dict(ch, n=len(ch.get("rows") or []), bend=0.0)], p["seed"])):
-                fixed += [(nm, np.array([0.5 * (lo[0] + hi[0]), lo[1] + float(y), lo[2] + float(zz)]) + P) for nm, P in grp]
-        free = [ch for ch in p["chains"] if not ch.get("rows")]
-        groups = chain_groups(free, p["seed"])
-        band = [ch.get("band") for ch in free for _ in range(int(ch["n"]))]
-        tilt = [ch.get("tilt") for ch in free for _ in range(int(ch["n"]))]
-    placed, failed, n_struct = pack(p["counts"], lo, hi, float(p["gap"]), int(p["seed"]), fixed=fixed, yrange=yrange, groups=groups, where=where, group_band=band, group_tilt=tilt)
+    cf, groups, band, tilt = chain_pieces(p.get("chains") or [], lo, hi, p["seed"], SPECIES)
+    placed, failed, n_struct = pack(p["counts"], lo, hi, float(p["gap"]), int(p["seed"]), SPECIES, fixed=fixed + cf, yrange=yrange, groups=groups, where=where, group_band=band, group_tilt=tilt)
     if failed:
         print(f"  seed table of {key}: NO PLACE FOUND for {failed} (the slab is full at this gap); they are left out")
-    names = [nm for nm in SPECIES if any(q[0] == nm for q in placed)]
-    bodies = [X for nm in names for q, X in placed if q == nm]
-    struct = [float(i < n_struct and nm not in (p.get("unbonded") or ())) for nm in names for i, (q, _) in enumerate(placed) if q == nm]   # 1 for a membrane body or a chain subunit, 0 for a body placed at random or of an `unbonded` kind
-    got = {nm: sum(1 for q, _ in placed if q == nm) for nm in names}
-    pos = np.full((len(bodies), nmax_of(p), 3), np.nan)
-    for k, X in enumerate(bodies):
-        pos[k, :len(X)] = X * UM
+    names, got, t = table_of(placed, n_struct, list(SPECIES), nmax_of(p), UM, PV, columns=_columns(p), unbonded=p.get("unbonded"), **_site_args(p))
+    if p.get("scale_to"):
+        t["kind"] = np.array([names.index(nm) for nm in names for _ in range(got[nm])], np.int16)
+    if (p.get("signal") or {}).get("model") == "rps":
+        t["cell__chem"] = _rps_start(len(t["pos"]), int(p["seed"]))
     os.makedirs(DATA, exist_ok=True)
     out = os.path.join(DATA, f"seed_{key}.npz")
-    np.savez(out, pos=pos, volume_um3=np.array([len(X) * PV * UM ** 3 for X in bodies]), value=np.array(struct),     # `value`: written to the cell block `bonded` when the scene has bonds
-             **({"kind": np.array([names.index(q) for q, _ in [(nm, None) for nm in names for _ in range(got[nm])]], np.int16)} if p.get("scale_to") else {}),
-             cell__adh=np.ones((len(bodies), 6)),
-             cell__valence=np.array([float(((p.get("binding") or {}).get("valence") or {}).get(nm, 0.0)) for nm in names for q, _ in placed if q == nm]),      # the cell block `valence` of a scene whose binding has one
-             **({"cell__site": _sites_of(p, names, got)} if p.get("sites") else {}),
-             **({"cell__molecule": _sites_of(dict(p, sites=dict(k=10 ** 9)), names, got)} if (p.get("binding") or {}).get("molecule") else {}),      # a chain's first subunit (a site of the whole chain); any other body, itself
-             **({"cell__chem": _rps_start(len(bodies), int(p["seed"]))} if (p.get("signal") or {}).get("model") == "rps" else {}),
-             cell__grate=np.array([float(((p.get("grow") or {}).get("kinds") or {}).get(nm, 0.0)) for nm in names for q, _ in placed if q == nm]),      # the cell block `grate` of a scene with `grow`
-             cell__drive=np.array([float(((p.get("push") or {}).get("types") or {}).get(nm, 0.0)) for nm in names for q, _ in placed if q == nm]))     # the cell block `drive` of a scene with `push`                    # `cell__adh`: the cell block `adh` (bond_binding's ceiling per face class) when the scene has binding; 1 everywhere
-    share = sum(len(X) for X in bodies) * PV / float(np.prod(p["box"]))
+    np.savez(out, **t)
+    share = int(np.isfinite(t["pos"][:, :, 0]).sum()) * PV / float(np.prod(p["box"]))
     return os.path.relpath(out, ROOT), got, share
 
 
-def _sites_of(p, names, got):
-    """Each body's site, as a cell index: for a subunit of a chain (its kind a chain kind, the chains of a kind one after the other, a chain's subunits in order), the first
-    subunit of its run of `sites.k`; for any other body, itself. Bodies in the seed table's order (kind by kind, SPECIES order)."""
-    k = int(p["sites"]["k"])
-    m_of = {ch["kind"]: int(ch["m"]) for ch in (p.get("chains") or [])}
-    out, base = [], 0
-    for nm in names:
-        n = int(got[nm])
-        for q in range(n):
-            if nm in m_of:
-                m = m_of[nm]
-                out.append(base + (q // m) * m + ((q % m) // k) * k)
-            else:
-                out.append(base + q)
-        base += n
-    return np.array(out, np.float64)
+def _columns(p):
+    """{cell block: {kind: value}} of the per-body columns a scene's seed carries: `valence` (binding.valence), `grate` (grow.kinds), `drive` (push.types)."""
+    return {"valence": dict((p.get("binding") or {}).get("valence") or {}), "grate": dict((p.get("grow") or {}).get("kinds") or {}),
+            "drive": dict((p.get("push") or {}).get("types") or {})}
+
+
+def _site_args(p):
+    """table_of's site arguments: subunits per binding site (`sites.k`), whether to write each body's molecule (`binding.molecule`), each chain kind's subunits."""
+    return dict(sites_k=(p.get("sites") or {}).get("k"), molecule=bool((p.get("binding") or {}).get("molecule")), chain_m={ch["kind"]: int(ch["m"]) for ch in (p.get("chains") or [])})
+
+
+def packable(p):
+    """True when the bodies of a scene are packed by seed_positions[packed] when `generate` runs (no seed table on disk): a scene of bodies placed at random and
+    chains. A scene with a membrane, a vesicle, a coarse lattice, groups taken from another run (seed_from), the rps signal's starting levels or `scale_to` (its
+    table's `kind` column feeds big_first) keeps its table."""
+    return not any(p.get(t) for t in ("membrane", "vesicle", "coarse", "seed_from", "scale_to", "region")) and (p.get("signal") or {}).get("model") != "rps"
+
+
+def _plain(v):
+    """A value as YAML writes it: tuples as lists, numpy numbers as Python numbers."""
+    if isinstance(v, dict):
+        return {k: _plain(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_plain(x) for x in v]
+    return v.item() if isinstance(v, np.generic) else v
+
+
+def packed_seed(key):
+    """seed_positions[packed]'s own parameters for `key` (the kinds with their points and shapes, the counts, the chains, the box, the gap, the seed, the slots, the
+    columns), and what that packing places, run here once to write the cell set's counts: (parameters, {kind: bodies}, the bodies' share of the box's volume)."""
+    from plexus.operators.seed_packed_ops import SeedPacked
+    p = params(key)
+    m = float(p["margin"])
+    lo, hi = np.full(3, m), np.full(3, m) + np.asarray(p["box"], float)
+    chains = [_plain(ch) for ch in (p.get("chains") or [])]
+    used = {nm for nm, c in p["counts"].items() if int(c) > 0} | {ch["kind"] for ch in chains} | {ch["riders"]["kind"] for ch in chains if ch.get("riders")}
+    site = _site_args(p)
+    op = {"kinds": [{"name": nm, "points": int(SPECIES[nm]["n"]), "shape": _plain(SPECIES[nm]["shape"])} for nm in SPECIES if nm in used],
+          "counts": {nm: int(c) for nm, c in p["counts"].items() if int(c) > 0}, **({"chains": chains} if chains else {}),
+          "box": [lo.tolist(), hi.tolist()], "gap": float(p["gap"]), "seed": int(p["seed"]), "slots": int(nmax_of(p)), "spacing": SPACING,
+          **({"unbonded": list(p["unbonded"])} if p.get("unbonded") else {}),
+          **({"columns": {c: per for c, per in _columns(p).items() if per}} if any(_columns(p).values()) else {}),
+          **({"sites": int(site["sites_k"])} if site["sites_k"] else {}), **({"molecule": True} if site["molecule"] else {})}
+    names, got, t = SeedPacked(dict(op, cell_set="cell", um_per_unit=UM)).packed()
+    share = int(np.isfinite(t["pos"][:, :, 0]).sum()) * PV / float(np.prod(p["box"]))
+    return op, got, share
 
 
 def nmax_of(p):
@@ -1226,7 +1038,11 @@ def _seed_tiles(key, p, lo, hi, nt=TILES, variants=4):
 def build(key):
     p = params(key)
     name = run_name(key)
-    table, got, share = seed_table(key)
+    packed, table = None, None                                       # seed_positions[packed]'s parameters (the bodies packed when `generate` runs), or the table on disk
+    if packable(p):
+        packed, got, share = packed_seed(key)
+    else:
+        table, got, share = seed_table(key)
     names = list(got)
     n = int(sum(got.values()))
     m = float(p["margin"])
@@ -1400,8 +1216,9 @@ def build(key):
             "aggregate_centroid",
             *(["cell_cycle", "cell_grow", "cell_populate", "cell_divide"] if gw else []),
         ],
-        "seed": [{"op": "seed_positions", "model": "from_points_ragged_batched" if (p.get("coarse") or p.get("seed_batched")) else "from_points_ragged", "at": "pt", "cell_set": "cell", "points": table, "um_per_unit": UM,
-                  "centre_um": [0.0, 0.0, 0.0], "centre": [0.0, 0.0, 0.0], **({"value_block": "bonded"} if p.get("bonds") else {})}],
+        "seed": [{"op": "seed_positions", **({"model": "packed"} if packed else {"model": "from_points_ragged_batched" if (p.get("coarse") or p.get("seed_batched")) else "from_points_ragged"}),
+                  "at": "pt", "cell_set": "cell", **({} if packed else {"points": table}), "um_per_unit": UM,
+                  "centre_um": [0.0, 0.0, 0.0], "centre": [0.0, 0.0, 0.0], **({"value_block": "bonded"} if p.get("bonds") else {}), **(packed or {})}],
         "plotting": {
             "renderer": "vtk_points", "subject": "pt", "render_3d": "contour",
             "point_volume": round(sp ** 3, 8) if p.get("coarse") else PV,   # the seed names no point_spacing: without this the studio takes 0.125^3 and draws slivers (TRAPS T-100); a coarse scene's own

@@ -22,11 +22,10 @@ experiments/*.md
 *.npz
 *.npy
 !experiments/*/data/seed_*.npz
-# the seed tables over 50 MB are written by their record's tool, not stored: `python tools/exp10_oocyte.py write oo1w`, `python tools/exp09_landscape.py write a100k`
+# the seed tables over 50 MB are written by their record's tool, not stored: `python tools/exp09_landscape.py write a100k` (exp10's are packed by `generate` itself)
 experiments/exp09_molecular_landscape/data/seed_a100k.npz
 experiments/exp09_molecular_landscape/data/seed_b1m.npz
 experiments/exp09_molecular_landscape/data/seed_b10m.npz
-experiments/exp10_oocyte_posterior/data/seed_oo1*.npz
 
 # drafts the GUI writes from a prompt
 config/studio/

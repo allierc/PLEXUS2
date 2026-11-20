@@ -3887,9 +3887,13 @@ class SeedFromPointsRaggedBatched(SeedFromPointsRagged):
 
     Reference: as from_points_ragged; Plexus exp09 (this work, 2026-11-17)."""
 
+    def _table(self, H):
+        """The seed table: the npz `points` (seed_positions[packed] packs it from the spec instead)."""
+        return np.load(self.points)
+
     def forward(self, H, mask=None):
         P, C = H.level(self.at), H.level(self.cell_set)
-        z = np.load(self.points); pos = z["pos"].astype(np.float64); vol = z["volume_um3"].astype(np.float64)       # (cells, N_max, 3) x y z, um; NaN rows = unused
+        z = self._table(H); pos = z["pos"].astype(np.float64); vol = z["volume_um3"].astype(np.float64)       # (cells, N_max, 3) x y z, um; NaN rows = unused
         nk = pos.shape[0]
         live_all = np.flatnonzero(C.occ.detach().cpu().numpy() > 0.5)
         if len(live_all) < nk:
