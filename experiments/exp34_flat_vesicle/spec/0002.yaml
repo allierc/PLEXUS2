@@ -1,5 +1,5 @@
 general:
-  name: exp33_ucb_flat_e007_h150_e09
+  name: exp34_ucb_flat_e007_h150_e09
   headline: random rotation of the whole body at every substep, a sphere of 100 cells, two divisions, slab on with a curvature-corrected plane,
     contact repulsion overlap 0.2
   title: A vesicle turned by a random rotation at every substep (frame_rotation apply and undo round the MPM substep block, about the centroid

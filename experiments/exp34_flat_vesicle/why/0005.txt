@@ -1,5 +1,5 @@
 time   2026-10-30 16:42:37
-run    tissue/exp33_ucb_flat2_e015_h150_e09 (exp33 optimisation pass 9, horizon 150 frames of 100 substeps; LEFT the cut at the equator from above, RIGHT the full oblique view, 31 recorded rows at 10 fps; under them the diameter, holes and mixing against the frames, their end values against the passes, and the knobs' path)
+run    tissue/exp34_ucb_flat2_e015_h150_e09 (exp33 optimisation pass 9, horizon 150 frames of 100 substeps; LEFT the cut at the equator from above, RIGHT the full oblique view, 31 recorded rows at 10 fps; under them the diameter, holes and mixing against the frames, their end values against the passes, and the knobs' path)
 score  gaps at the end of the horizon (band units; |gap| <= 1 is inside the twin's seed spread): diameter -2.56, thin +0.77, round +0.00, void +1.53, gini +0.00
 score  fraction of windows inside the band: diameter 0.59, thin 0.95, round 1.00, void 0.95, gini 1.00
 score  window loss mean 3.516, last 10 windows 29.28; 1 Adam steps, lr 0.0004

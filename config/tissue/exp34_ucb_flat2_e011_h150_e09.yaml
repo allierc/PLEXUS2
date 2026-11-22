@@ -1,5 +1,5 @@
 general:
-  name: exp33_ucb_flat2_e006_h150_e08
+  name: exp34_ucb_flat2_e011_h150_e09
   headline: random rotation of the whole body at every substep, a sphere of 100 cells, two divisions, slab on with a curvature-corrected plane,
     contact repulsion overlap 0.2
   title: A vesicle turned by a random rotation at every substep (frame_rotation apply and undo round the MPM substep block, about the centroid
@@ -83,7 +83,7 @@ operators:
 - {op: mpm_grid_update, at: mpm_grid, cell_surface_tension: 0.15, csf_rho: 1.0, csf_band: 0.1, csf_smooth: 1, tension_on: all, cell_surface_tension_block: tension,
   implementation: body_csf_balanced}
 - {op: mpm_gather, at: pt, from: mpm_grid, implementation: default}
-- {op: active_force, model: layer_slab, at: pt, cells: cell, centre_block: vc, mid_block: mid, half_thickness: 0.6, wall_stiffness: 3000.0, half_thickness_block: half}
+- {op: active_force, model: layer_slab, at: pt, cells: cell, centre_block: vc, mid_block: mid, half_thickness: 0.6, wall_stiffness: 300.0, half_thickness_block: half}
 - {op: deform_control, implementation: cell_flattening, at: pt, cells: cell, centre_block: vc, block: flat}
 - {op: aggregate_centroid, at: cell, child: pt}
 - op: cell_normal
