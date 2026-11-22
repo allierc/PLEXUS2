@@ -406,12 +406,40 @@ PAGE = """<!doctype html><html><head><meta charset=utf-8><title>Plexus — watch
  button.on{background:#2d4a2d;border-color:#3f6b3f}
  button.ic{padding:2px 4px;margin-right:3px;vertical-align:middle;line-height:0}
  button.ic svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round}
+
+ /* THE FLAT LOOK (Cedric, 2026-11-22): the page, the movie and every pane are the grey of the scene (141, 152, 165), no borders, white text; a button is
+    one tone darker, the one that is on is near-white; the pane tabs sit on the row of the selection buttons, above their pane. */
+ :root{--bg:#8d98a5;--btn:#707b88;--btn2:#7a8593;--on:#ecf0f4;--ink:#263038;--sub:#e0e6ec;--card:#7e8996}
+ body{background:var(--bg);color:#ffffff;display:grid;grid-template-columns:auto minmax(300px,1fr);column-gap:18px;align-items:start}
+ body>h1,body>.sub,body>.t,body>#d3bar{grid-column:1 / -1}
+ body>#ctl{grid-column:1;grid-row:3}
+ body>.tabs{grid-column:2;grid-row:3;margin-bottom:8px}
+ .wrap{display:contents}
+ .wrap>.col:first-child{grid-column:1}
+ .wrap>.col:last-child{grid-column:2;min-width:300px}
+ h1{color:#ffffff}
+ .sub,.t,.ps-g,.ps-k,.ps-m,.ps-st,.ps-sym,details.ps-q summary{color:var(--sub)}
+ .why{background:var(--card);border-left:3px solid #ffffff;color:#ffffff}
+ video,img{border:0;background:none}
+ .ps-pane,pre{background:var(--bg);border:0;color:#ffffff}
+ .ps-h,.ps-mw,.ps-exh{color:#ffffff}
+ .ps-n,.ps-w,.ps-story{color:#ffffff}
+ .ps-ex{background:var(--card);border-left:3px solid #ffffff;color:#ffffff}
+ .ps-ex code{background:var(--btn)}
+ .ps-mrow:hover td{background:var(--card)}
+ .ps-chg{color:#ffffff}
+ .ps-sw{border:1px solid var(--btn)}
+ button,select{background:var(--btn);color:#ffffff;border:0;border-radius:4px}
+ button:hover{background:var(--btn2)}
+ button.on{background:var(--on);color:var(--ink)}
+ #loading{color:#ffffff}
+ b{color:#ffffff}
 </style></head><body>
 <h1>Plexus &mdash; watching the session</h1>
 <div class=sub id=meta>&hellip;</div>
-<div class=row style="margin-bottom:8px">
+<div class=row id=ctl style="margin-bottom:8px">
  <select id=recsel onchange="pickRec(this.value)" title="which experiment's record to watch"
-         style="background:#1d2530;color:#ccd3da;border:1px solid #2f3945;border-radius:4px;padding:3px 6px;margin-right:10px;font:inherit"></select>
+         style="padding:3px 6px;margin-right:10px;font:inherit"></select>
  <button onclick="step(-10)" title="back ten steps">&laquo;</button>
  <button onclick="step(-1)">&lt;</button>
  <button onclick="step(1)">&gt;</button>
@@ -442,6 +470,13 @@ PAGE = """<!doctype html><html><head><meta charset=utf-8><title>Plexus — watch
  <span id=d3note class=t></span>
  <span id=drvnote class=t style="color:#7aa2f7"></span>
 </div>
+<div class="row tabs">
+ <button onclick="pane('plexus')" id=b_plexus class=on>plexus</button>
+ <button onclick="pane('math')" id=b_math>math</button>
+ <button onclick="pane('hierarchy')" id=b_hierarchy>hierarchy</button>
+ <button onclick="pane('spec')" id=b_spec>spec</button>
+ <button onclick="pane('insights')" id=b_insights>insights</button>
+  </div>
 <div class=row id=d3bar style="margin-bottom:8px;display:none">
  <span class=t>frame</span>
  <input type=range id=d3frame min=0 max=0 value=0 step=1 style="width:520px" oninput="scrub3d(this.value)">
@@ -477,13 +512,6 @@ PAGE = """<!doctype html><html><head><meta charset=utf-8><title>Plexus — watch
   </script>
  </div>
  <div class=col style="flex:1;min-width:300px">
-  <div class="row tabs" style="margin-bottom:6px">
-   <button onclick="pane('plexus')" id=b_plexus class=on>plexus</button>
-   <button onclick="pane('math')" id=b_math>math</button>
-   <button onclick="pane('hierarchy')" id=b_hierarchy>hierarchy</button>
-   <button onclick="pane('spec')" id=b_spec>spec</button>
-   <button onclick="pane('insights')" id=b_insights>insights</button>
-  </div>
   <div id=plexus class=ps-pane></div>
   <div id=math class=ps-pane style="display:none"></div>
   <div id=hierarchy class=ps-pane style="display:none"></div>
