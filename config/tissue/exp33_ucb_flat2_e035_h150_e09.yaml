@@ -78,11 +78,11 @@ operators:
   - [-0.1]
   contact_edge_width: 0.2
   contact_surface_tension_block: contact_tension
-- {op: mpm_strain, at: pt, implementation: differentiable}
-- {at: mpm_grid, drag: 1.0, from: pt, implementation: differentiable, op: mpm_scatter}
+- {op: mpm_strain, at: pt, implementation: default}
+- {at: mpm_grid, drag: 1.0, from: pt, implementation: default, op: mpm_scatter}
 - {op: mpm_grid_update, at: mpm_grid, cell_surface_tension: 0.15, csf_rho: 1.0, csf_band: 0.1, csf_smooth: 1, tension_on: all, cell_surface_tension_block: tension,
-  implementation: body_csf_balanced_diff}
-- {op: mpm_gather, at: pt, from: mpm_grid, implementation: differentiable}
+  implementation: body_csf_balanced}
+- {op: mpm_gather, at: pt, from: mpm_grid, implementation: default}
 - {op: active_force, model: layer_slab, at: pt, cells: cell, centre_block: vc, mid_block: mid, half_thickness: 0.6, wall_stiffness: 300.0, half_thickness_block: half}
 - {op: deform_control, implementation: cell_flattening, at: pt, cells: cell, centre_block: vc, block: flat}
 - {op: aggregate_centroid, at: cell, child: pt}
