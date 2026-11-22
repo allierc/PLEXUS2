@@ -1,0 +1,24 @@
+{
+ "episode": 47,
+ "switches": {
+  "slab_k": 300.0
+ },
+ "switch_key": "slab_k=300.0",
+ "start_u": [
+  0.02828,
+  0.513,
+  0.02196,
+  0.39759,
+  0.29243
+ ],
+ "start": {
+  "cell.flat": 0.001641405575161749,
+  "cell.half": 0.6808502537674037,
+  "cell.contact_tension": -0.24516920513928162,
+  "cell.tension": 0.8676487580953214,
+  "cell.grow": 0.0020482646313634036
+ },
+ "proposer": "puct",
+ "parent": null,
+ "move": "explore"
+}

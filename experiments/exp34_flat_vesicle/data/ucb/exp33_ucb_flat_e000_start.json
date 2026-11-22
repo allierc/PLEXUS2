@@ -1,0 +1,26 @@
+{
+ "episode": 0,
+ "switches": {
+  "overlap": 0.2,
+  "slab_k": 1000.0,
+  "division_cv": 0.1
+ },
+ "switch_key": "overlap=0.2|slab_k=1000.0|division_cv=0.1",
+ "start_u": [
+  0.29167,
+  0.5,
+  0.75,
+  0.52288,
+  0.56987
+ ],
+ "start": {
+  "cell.flat": 0.0035,
+  "cell.half": 0.6,
+  "cell.contact_tension": -0.1,
+  "cell.tension": 1.0,
+  "cell.grow": 0.00231
+ },
+ "proposer": "cold",
+ "parent": null,
+ "move": "cold: movie 52 setup"
+}

@@ -1,0 +1,65 @@
+{
+ "name": "exp33_ucb_flat_e007",
+ "start": {
+  "cell.flat": 0.008806381300884576,
+  "cell.half": 0.7642905597641207,
+  "cell.contact_tension": -0.335567338043955,
+  "cell.tension": 2.2531168457444015,
+  "cell.grow": 0.0022119038457063625
+ },
+ "end": {
+  "cell.flat": 0.009176848456263542,
+  "cell.half": 1.1957612037658691,
+  "cell.contact_tension": 0.1852419227361679,
+  "cell.tension": 0.09999999403953552,
+  "cell.grow": 0.0022119043860584497
+ },
+ "value": -580.2020834312241,
+ "passes": [
+  {
+   "z": -6432.973539156914,
+   "accepted": true
+  },
+  {
+   "z": -580.2020834312241,
+   "accepted": true
+  }
+ ],
+ "best_pass": 1,
+ "switches": {
+  "overlap": 0.2,
+  "slab_k": 3000.0,
+  "division_cv": 0.0
+ },
+ "scores_seed": {
+  "diameter": 6.00237512588501,
+  "roundness": 0.004732008092105389,
+  "aspect": 1.0619724988937378,
+  "wall": 0.29655721783638,
+  "gini": 0.038162410259246826,
+  "void": 0.002726151142269373,
+  "contact": 5.193451881408691,
+  "points": 12500.0,
+  "cells": 100.0
+ },
+ "scores_onset": null,
+ "metrics_end": {
+  "diameter": 9.377642631530762,
+  "roundness": 0.3087920844554901,
+  "aspect": 1.013248085975647,
+  "wall": 1.5192850828170776,
+  "gini": 0.0044439854100346565,
+  "void": 0.6227536201477051,
+  "contact": 3.7052910327911377,
+  "points": 33700.0,
+  "cells": 200.0
+ },
+ "failed": false,
+ "learn": true,
+ "frames": 150.0,
+ "grad_finite": false,
+ "n_skipped": 1659,
+ "gpu_gb_max": 15.93,
+ "wall_min": 112.01,
+ "plan": "50:5:2,100:2:1,150:2:1"
+}

@@ -1,0 +1,26 @@
+{
+ "episode": 3,
+ "switches": {
+  "overlap": 0.2,
+  "slab_k": 300.0,
+  "division_cv": 0.1
+ },
+ "switch_key": "overlap=0.2|slab_k=300.0|division_cv=0.1",
+ "start_u": [
+  0.26812,
+  0.88705,
+  0.69683,
+  0.5098,
+  0.76387
+ ],
+ "start": {
+  "cell.flat": 0.003217469553418869,
+  "cell.half": 0.8322314448930956,
+  "cell.contact_tension": -0.12126704140116285,
+  "cell.tension": 0.9703344801344934,
+  "cell.grow": 0.0026757835362101663
+ },
+ "proposer": "puct",
+ "parent": null,
+ "move": "explore"
+}
