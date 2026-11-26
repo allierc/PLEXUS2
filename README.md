@@ -2,9 +2,7 @@
 
 ![exp34_flat_vesicle](exp34_flat_vesicle.gif)
 
-PLEXUS represents a cell tissue as a dynamical system composed of graphs, states, coupling relationships, and differentiable functions.
-
-We define the system at time $t$ as:
+PLEXUS represents a cell tissue as a dynamical system composed of graphs, states, coupling relationships, and differentiable functions. We define the system at time $t$ as:
 
 $$
 \mathcal{D}(t) = (\mathcal{G}(t), \mathbf{X}(t), \mathcal{F}, C(t))
@@ -60,19 +58,9 @@ f_i(X_i,G_i,C_i;\theta_i)
 }
 $$
 
-If the individual functions are differentiable, their sum and the resulting Euler evolution map are also differentiable, provided the graph topology and coupling structure are fixed during the differentiation step.
+If the individual functions are differentiable, their sum and the resulting Euler evolution map are also differentiable, provided the graph topology and coupling structure are fixed during the differentiation step. This allows the learnable parameters of individual functions to be optimized jointly against target trajectories or energy functions using gradient-based optimization.
+Graph structures and coupling relationships can evolve during simulation. In particular, cells are represented as supernodes containing graphs of material points or vertices. Cell growth, division, and death can change graph membership and topology without changing the dimensions of the underlying state tensors. This is achieved using a fixed reservoir of material points or vertices, with active elements changing over time. Cell division, for example, partitions the parent cell's material points between its two daughter cells, preserving the underlying state tensor dimensions.
 
-This allows the learnable parameters of individual functions to be optimized jointly against target trajectories or energy functions using gradient-based optimization.
-
-Graph structures and coupling relationships can evolve during simulation.
-
-In particular, cells are represented as supernodes containing graphs of material points or vertices. Cell growth, division, and death can change graph membership and topology without changing the dimensions of the underlying state tensors.
-
-This is achieved using a fixed reservoir of material points or vertices, with active elements changing over time.
-
-Cell division, for example, partitions the parent cell's material points between its two daughter cells, preserving the underlying state tensor dimensions.
-
-Thus, PLEXUS combines differentiable continuous dynamics with discrete structural changes, enabling the simulation and learning of evolving cell tissues.
 ## Installation
 
 ```bash
