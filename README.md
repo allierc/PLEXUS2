@@ -3,9 +3,9 @@
 ![exp34_flat_vesicle](exp34_flat_vesicle.gif)
 
 PLEXUS represents a cell tissue as a dynamical system composed of graphs, states, coupling relationships, and differentiable functions. We define the system at time $t$ as:
-$$
+$
 \mathcal{D}(t) = (\mathcal{G}(t), \mathbf{X}(t), \mathcal{F}, C(t))
-$$
+$
 where:
 - $\mathcal{G}(t) = \{G_1(t), \ldots, G_n(t)\}$ is a collection of graphs.
 - $\mathbf{X}(t)$ is the collection of states associated with graph elements.
