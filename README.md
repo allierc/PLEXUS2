@@ -23,7 +23,6 @@ Graphs can be coupled through three types of relationships:
 Each function acts on subsets of states, graphs, and coupling relationships, and produces a state increment:
 
 $$\Delta X_i = f_i(X_i, G_i, C_i; \theta_i)$$
-
 where:
 - $X_i \subseteq \mathbf{X}$ is the subset of states accessed by the function.
 - $G_i \subseteq \mathcal{G}$ is the subset of graphs involved.
