@@ -2,8 +2,6 @@
 
 ![exp34_flat_vesicle](exp34_flat_vesicle.gif)
 
-## Mathematical formalism
-
 PLEXUS represents a cell tissue as a dynamical system composed of graphs, states, coupling relationships, and differentiable functions.
 
 We define the system at time $t$ as:
@@ -19,8 +17,6 @@ where:
 - $\mathcal{F} = \{f_1, \ldots, f_m\}$ is a collection of functions governing the system dynamics.
 - $C(t)$ describes the coupling relationships between graphs.
 
-### Graph coupling
-
 Graphs can be coupled through three types of relationships:
 
 1. **Cross-graph edges:** Edges connecting nodes belonging to different graphs.
@@ -34,9 +30,6 @@ C(t) = (C_E(t), C_V(t), C_H(t))
 $$
 
 where the three components represent cross-graph edges, shared nodes, and hierarchical relationships, respectively.
-
-### Differentiable functions
-
 Each function acts on subsets of states, graphs, and coupling relationships, and produces a state increment:
 
 $$
@@ -70,8 +63,6 @@ $$
 If the individual functions are differentiable, their sum and the resulting Euler evolution map are also differentiable, provided the graph topology and coupling structure are fixed during the differentiation step.
 
 This allows the learnable parameters of individual functions to be optimized jointly against target trajectories or energy functions using gradient-based optimization.
-
-### Dynamic topology and cell lifecycle
 
 Graph structures and coupling relationships can evolve during simulation.
 
