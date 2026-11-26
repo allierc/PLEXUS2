@@ -4,9 +4,9 @@
 
 PLEXUS represents a cell tissue as a dynamical system composed of graphs, states, coupling relationships, and differentiable functions. We define the system at time $t$ as:
 
-$
+$$
 \mathcal{D}(t) = (\mathcal{G}(t), \mathbf{X}(t), \mathcal{F}, C(t))
-$
+$$
 
 where:
 
@@ -15,12 +15,11 @@ where:
 - $\mathcal{F} = \{f_1, \ldots, f_m\}$ is a collection of functions governing the system dynamics.
 - $C(t)$ describes the coupling relationships between graphs.
 
-- 
 Graphs can be coupled through three types of relationships:
 1. **Cross-graph edges:** Edges connecting nodes belonging to different graphs.
 2. **Shared nodes:** Nodes belonging to multiple graphs.
 3. **Supernodes:** Nodes containing an entire graph or subgraph.
-4. 
+ 
 Each function acts on subsets of states, graphs, and coupling relationships, and produces a state increment:
 
 $$
@@ -32,7 +31,7 @@ where:
 - $G_i \subseteq \mathcal{G}$ is the subset of graphs involved.
 - $C_i \subseteq C$ is the subset of coupling relationships involved.
 - $\theta_i$ denotes the learnable parameters of the function.
-- 
+  
 The global state increment is obtained by summing the contributions of all functions:
 
 $$
