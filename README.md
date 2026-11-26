@@ -25,7 +25,7 @@ Each function acts on subsets of states, graphs, and coupling relationships, and
 $$\Delta \mathbf{X_i} = f_i(\mathbf{X_i}, G_i, C_i; \theta_i)$$
 
 where:
-- $X_i \subseteq \mathbf{X}$ is the subset of states accessed by the function.
+- $\mathbf{X_i} \subseteq \mathbf{X}$ is the subset of states accessed by the function.
 - $G_i \subseteq \mathcal{G}$ is the subset of graphs involved.
 - $C_i \subseteq C$ is the subset of coupling relationships involved.
 - $\theta_i$ denotes the learnable parameters of the function.
@@ -42,7 +42,7 @@ $$
 \mathbf{X}(t+\Delta t) =
 \mathbf{X}(t) +
 \Delta t \sum_{i=1}^{m}
-f_i(X_i,G_i,C_i;\theta_i)
+f_i(\mathbf{X_i},G_i,C_i;\theta_i)
 $$
 
 If the individual functions are differentiable, their sum and the resulting Euler evolution map are also differentiable, provided the graph topology and coupling structure are fixed during the differentiation step. This allows the learnable parameters of individual functions to be optimized jointly against target trajectories or energy functions using gradient-based optimization.
