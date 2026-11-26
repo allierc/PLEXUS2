@@ -21,13 +21,6 @@ Graphs can be coupled through three types of relationships:
 2. **Shared nodes:** Nodes belonging to multiple graphs.
 3. **Supernodes:** Nodes containing an entire graph or subgraph.
 
-We can therefore write:
-
-$$
-C(t) = (C_E(t), C_V(t), C_H(t))
-$$
-
-where the three components represent cross-graph edges, shared nodes, and hierarchical relationships, respectively.
 Each function acts on subsets of states, graphs, and coupling relationships, and produces a state increment:
 
 $$
