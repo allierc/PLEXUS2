@@ -106,11 +106,4 @@ environment.linux.yaml is the environment the runs were made in (NVIDIA GPU, CUD
 
 Run
 bash
-python Plexus_Main.py -o generate tissue/exp34_ucb_flat_e000_h150_e07 --output_root <data root>   # run one spec of config/
-
-
-Open the watcher in a browser with python Plexus_gui.py (it opens http://127.0.0.1:8799/watch); it shows the records of experiments/, one at a time (?rec=experiments/<name>).
-
-!watcher
-
-To start a new experiment, follow experiments/INSTRUCTION.md.
+python Plexus_Main.py -o generate tissue/exp34_ucb_flat
