@@ -33,7 +33,7 @@ where:
 The global state increment is obtained by summing the contributions of all functions:
 
 $$
-\Delta \mathbf{X} = \sum_{i=1}^{m} \Delta X_i
+\Delta \mathbf{X} = \sum_{i=1}^{m} \Delta \mathbf{X_i}
 $$
 
 The system evolves through Euler integration:
