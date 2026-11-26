@@ -16,9 +16,9 @@ where:
 - $C(t)$ describes the coupling relationships between graphs.
 
 Graphs can be coupled through three types of relationships:
-1. **Cross-graph edges:** Edges connecting nodes belonging to different graphs.
-2. **Shared nodes:** Nodes belonging to multiple graphs.
-3. **Supernodes:** Nodes containing an entire graph or subgraph.
+1. cross-graph edges: edges connecting nodes belonging to different graphs.
+2. shared nodes: nodes belonging to multiple graphs.
+3. supernodes: nodes containing an entire graph or subgraph.
  
 Each function acts on subsets of states, graphs, and coupling relationships, and produces a state increment:
 
