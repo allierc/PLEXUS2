@@ -1,7 +1,5 @@
 # PLEXUS
 
-A differentiable cell tissue computation
-
 ![exp34_flat_vesicle](exp34_flat_vesicle.gif)
 
 ## Mathematical formalism
