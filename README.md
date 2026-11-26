@@ -73,9 +73,23 @@ This is achieved using a fixed reservoir of material points or vertices, with ac
 Cell division, for example, partitions the parent cell's material points between its two daughter cells, preserving the underlying state tensor dimensions.
 
 Thus, PLEXUS combines differentiable continuous dynamics with discrete structural changes, enabling the simulation and learning of evolving cell tissues.
-
 ## Installation
 
 ```bash
 conda env create -f envs/environment.linux.yaml   # or envs/environment.mac.yaml
 conda activate plexus
+```
+
+`environment.linux.yaml` is the environment the runs were made in (NVIDIA GPU, CUDA 12.8); `environment.mac.yaml` has the same packages unpinned and runs the watcher and the specs, not the Warp scenes of exp09 and exp10.
+
+## Run
+
+```bash
+python Plexus_Main.py -o generate tissue/exp34_ucb_flat_e000_h150_e07 --output_root <data root>   # run one spec of config/
+```
+
+Open the watcher in a browser with `python Plexus_gui.py` (it opens http://127.0.0.1:8799/watch); it shows the records of `experiments/`, one at a time (`?rec=experiments/<name>`).
+
+![watcher](watcher.png)
+
+To start a new experiment, follow [`experiments/INSTRUCTION.md`](experiments/INSTRUCTION.md).
