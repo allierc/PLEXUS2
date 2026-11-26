@@ -41,12 +41,10 @@ $$
 The system evolves through Euler integration:
 
 $$
-\boxed{
 \mathbf{X}(t+\Delta t) =
 \mathbf{X}(t) +
 \Delta t \sum_{i=1}^{m}
 f_i(X_i,G_i,C_i;\theta_i)
-}
 $$
 
 If the individual functions are differentiable, their sum and the resulting Euler evolution map are also differentiable, provided the graph topology and coupling structure are fixed during the differentiation step. This allows the learnable parameters of individual functions to be optimized jointly against target trajectories or energy functions using gradient-based optimization.
